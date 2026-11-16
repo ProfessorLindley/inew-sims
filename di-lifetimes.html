@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DI Lifetimes</title>
+<style>
+  :root { --green: #215732; --green-bg: #f3f8f4; --ink: #1a1a1a; --muted: #4a4a4a; --line: #888888; --code-bg: #f4f4f4; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: #ffffff; color: var(--ink);
+         font-family: Lato, "Segoe UI", Arial, sans-serif; font-size: 16px; line-height: 1.5; }
+  h1 { font-size: 1.35rem; margin: 0 0 4px 0; color: var(--green); }
+  h2 { font-size: 1.1rem; margin: 16px 0 6px 0; }
+  p.lead { margin: 0 0 12px 0; color: var(--muted); }
+  .panel { border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin: 10px 0; background: #ffffff; }
+  button { font-size: 1rem; padding: 8px 14px; margin: 6px 6px 0 0; border-radius: 6px; cursor: pointer;
+           border: 2px solid var(--green); background: var(--green); color: #ffffff; }
+  button.secondary { background: #ffffff; color: var(--green); }
+  :focus-visible { outline: 3px solid #1f6feb; outline-offset: 2px; }
+  pre { background: var(--code-bg); border: 1px solid #cccccc; border-radius: 4px; padding: 10px; margin: 6px 0;
+        overflow-x: auto; font-family: Consolas, Menlo, monospace; font-size: 0.9rem; white-space: pre; }
+  code { font-family: Consolas, Menlo, monospace; background: var(--code-bg); padding: 0 3px; border-radius: 3px; }
+  .note { font-size: 0.92rem; color: var(--muted); }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; margin: 6px 0; }
+  th, td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; }
+  th { background: #e9ecef; }
+  tr.latest td { background: var(--green-bg); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Dependency Injection Lifetimes</h1>
+  <p class="lead">Three counter classes are registered with three different lifetimes. On every request, two classes ask for all
+    three counters: a Helper class first, then the page model. Each one calls <code>Next()</code> once. Send a few requests and compare the numbers.</p>
+
+  <div class="panel">
+    <p style="margin:0;font-weight:bold">Program.cs</p>
+    <pre tabindex="0" role="region" aria-label="Registrations in Program.cs">builder.Services.AddSingleton&lt;SingletonCounter&gt;();
+builder.Services.AddScoped&lt;ScopedCounter&gt;();
+builder.Services.AddTransient&lt;TransientCounter&gt;();</pre>
+    <p style="margin:0;font-weight:bold">Each counter class</p>
+    <pre tabindex="0" role="region" aria-label="Counter class">public class SingletonCounter { private int _n; public int Next() =&gt; ++_n; }</pre>
+    <button type="button" id="send">Send a request</button>
+    <button type="button" class="secondary" id="restart">Stop and restart the app</button>
+  </div>
+
+  <p id="status" aria-live="polite" class="panel">No requests yet.</p>
+
+  <div class="scroll" tabindex="0" role="region" aria-label="Results table">
+  <table>
+    <caption style="text-align:left;font-weight:bold">What each class saw (object number, then the value Next() returned)</caption>
+    <thead>
+      <tr><th scope="col">Request</th><th scope="col">Who asked</th><th scope="col">Singleton</th><th scope="col">Scoped</th><th scope="col">Transient</th></tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+  </div>
+  <p class="note">The values match a real ASP.NET Core app built with these three registrations. Object numbers are added here so you can see
+    which object each class received; the real app does not number them.</p>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let req, singleton, objCount, objs;
+function reset() {
+  req = 0; objCount = { S: 0, Sc: 0, T: 0 };
+  singleton = null; objs = [];
+}
+function make(kind) { objCount[kind]++; return { kind, num: objCount[kind], n: 0 }; }
+function next(o) { o.n++; return o.n; }
+
+function send() {
+  req++;
+  if (!singleton) singleton = make('S');            // created once, the first time anyone asks
+  const scoped = make('Sc');                          // one per request, shared inside it
+  const rows = [];
+  for (const who of ['Helper', 'Page model']) {
+    const t = make('T');                              // a new one every time anyone asks
+    rows.push({ who, s: [singleton.num, next(singleton)], sc: [scoped.num, next(scoped)], t: [t.num, next(t)] });
+  }
+  document.querySelectorAll('#rows tr.latest').forEach(r => r.classList.remove('latest'));
+  const html = rows.map((r, i) => `<tr class="latest"><th scope="row">${i === 0 ? req : ''}</th><td>${r.who}</td>` +
+    `<td>object #${r.s[0]}: ${r.s[1]}</td><td>object #${r.sc[0]}: ${r.sc[1]}</td><td>object #${r.t[0]}: ${r.t[1]}</td></tr>`).join('');
+  $('rows').insertAdjacentHTML('beforeend', html);
+  const [h, p] = rows;
+  $('status').textContent = `Request ${req}. Singleton: the Helper got ${h.s[1]} and the page got ${p.s[1]}, from the same object, which keeps counting across requests. ` +
+    `Scoped: ${h.sc[1]} then ${p.sc[1]}, from one object that lives only for this request. ` +
+    `Transient: ${h.t[1]} and ${p.t[1]}, because each class got its own brand-new object.`;
+}
+$('send').addEventListener('click', send);
+$('restart').addEventListener('click', () => {
+  reset(); $('rows').innerHTML = '';
+  $('status').textContent = 'The app restarted. Every object is gone, including the singleton, so all counts start over.';
+});
+reset();
+</script>
+</body>
+</html>

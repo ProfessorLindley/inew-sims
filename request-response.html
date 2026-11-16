@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Request and Response</title>
+<style>
+  /* Shared look for every INEW simulation. Embedded in Canvas pages with an iframe, so keep it light and plain. */
+  :root { --green: #215732; --green-bg: #f3f8f4; --ink: #1a1a1a; --muted: #4a4a4a; --line: #888888;
+          --warn: #8a1c1c; --warn-bg: #fdf0f0; --hi: #fff3bf; --code-bg: #f4f4f4; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: #ffffff; color: var(--ink);
+         font-family: Lato, "Segoe UI", Arial, sans-serif; font-size: 16px; line-height: 1.5; }
+  h1 { font-size: 1.35rem; margin: 0 0 4px 0; color: var(--green); }
+  h2 { font-size: 1.1rem; margin: 18px 0 6px 0; }
+  p.lead { margin: 0 0 12px 0; color: var(--muted); }
+  .panel { border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin: 10px 0; background: #ffffff; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; }
+  .col { flex: 1 1 280px; min-width: 0; }
+  label { display: block; font-weight: bold; margin: 8px 0 2px 0; }
+  input[type=text], input[type=number], select { width: 100%; max-width: 360px; padding: 6px 8px; font-size: 1rem;
+         border: 1px solid var(--line); border-radius: 4px; }
+  button { font-size: 1rem; padding: 8px 14px; margin: 6px 6px 0 0; border-radius: 6px; cursor: pointer;
+           border: 2px solid var(--green); background: var(--green); color: #ffffff; }
+  button.secondary { background: #ffffff; color: var(--green); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  :focus-visible { outline: 3px solid #1f6feb; outline-offset: 2px; }
+  pre { background: var(--code-bg); border: 1px solid #cccccc; border-radius: 4px; padding: 10px; margin: 6px 0;
+        overflow-x: auto; font-family: Consolas, Menlo, monospace; font-size: 0.92rem; white-space: pre; }
+  pre:focus-visible { outline: 3px solid #1f6feb; }
+  code { font-family: Consolas, Menlo, monospace; background: var(--code-bg); padding: 0 3px; border-radius: 3px; }
+  .step { border: 2px solid #cccccc; border-radius: 6px; padding: 8px 10px; margin: 6px 0; background: #ffffff; }
+  .step.active { border-color: var(--green); background: var(--green-bg); }
+  .step .tag { font-weight: bold; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.9rem; border: 1px solid var(--ink); }
+  .ok { background: #e6f4ea; } .bad { background: var(--warn-bg); color: var(--warn); }
+  .err { color: var(--warn); }
+  .note { font-size: 0.92rem; color: var(--muted); }
+  .hl { background: var(--hi); }
+  table { border-collapse: collapse; margin: 8px 0; }
+  th, td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; }
+  th { background: #e9ecef; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Request and Response</h1>
+  <p class="lead">Pick a path, send the request, then step through what the browser and the server do. The server is the demo app from Page 1.1, running at localhost:5171.</p>
+
+  <div class="panel">
+    <label for="pathSel">Path to request</label>
+    <select id="pathSel">
+      <option value="/">/ (the Home page)</option>
+      <option value="/Clock">/Clock</option>
+      <option value="/hello.html">/hello.html</option>
+      <option value="/Shop/Hours">/Shop/Hours</option>
+      <option value="/Shop/Hourz">/Shop/Hourz (a typo)</option>
+      <option value="/Broken">/Broken</option>
+    </select>
+    <p>Full URL: <code id="fullUrl">http://localhost:5171/</code></p>
+    <button id="sendBtn" type="button">Send request</button>
+    <button id="nextBtn" type="button" class="secondary" disabled>Next step</button>
+    <button id="resetBtn" type="button" class="secondary" disabled>Start over</button>
+  </div>
+
+  <h2>The trip</h2>
+  <ol id="steps" style="list-style: none; padding-left: 0; margin: 0;">
+    <li class="step" data-step="1"><span class="tag">1. Browser sends the request</span> <span class="state"></span></li>
+    <li class="step" data-step="2"><span class="tag">2. Server finds what handles the path</span> <span class="state"></span></li>
+    <li class="step" data-step="3"><span class="tag">3. Server sends the response</span> <span class="state"></span></li>
+    <li class="step" data-step="4"><span class="tag">4. Browser shows the result</span> <span class="state"></span></li>
+  </ol>
+
+  <h2 id="detailHead">What is happening</h2>
+  <div id="detail" class="panel" aria-live="polite" aria-labelledby="detailHead">
+    <p>Choose a path and click Send request.</p>
+  </div>
+
+  <p class="note">Simplified for learning. A real browser sends more headers than shown here, and lines marked ... in a response were skipped to keep it short. The status lines, headers, and page text match real runs of the demo app.</p>
+</main>
+<script>
+  // No external libraries. Every code block that can scroll gets tabindex="0" so keyboard users can scroll it.
+  function scrollable() { document.querySelectorAll('pre').forEach(p => p.setAttribute('tabindex', '0')); }
+  scrollable();
+
+  function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function clockText() { return new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit" }); }
+
+  const ROUTES = {
+    "/": { code: 200, handler: "<p>The path / goes to <code>Pages/Index.cshtml</code>. Its page model, <code>Index.cshtml.cs</code>, runs <code>OnGet</code>, and Razor builds the HTML inside the shared layout.</p>",
+      headers: ["Content-Type: text/html; charset=utf-8"],
+      body: () => '<!DOCTYPE html>\n<html lang="en">\n...\n    <title>Home page - Demos</title>\n...\n<div class="text-center">\n    <h1 class="display-4">Welcome</h1>\n    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>\n</div>\n...',
+      shows: () => "<p>The template's Welcome page: a large Welcome heading and a link about building web apps with ASP.NET Core.</p>" },
+    "/Clock": { code: 200, handler: "<p>The path /Clock goes to <code>Pages/Clock.cshtml</code>. <code>ClockModel.OnGet</code> runs and sets <code>ServerTime</code> to the time on the server. Razor puts that time into the HTML.</p>",
+      headers: ["Content-Type: text/html; charset=utf-8"],
+      body: t => `<!DOCTYPE html>\n<html lang="en">\n...\n    <title>Clock - Demos</title>\n...\n<h1>Server Clock</h1>\n<p>The server built this page at ${t}.</p>\n...`,
+      shows: t => `<p>The heading Server Clock and the line: The server built this page at ${t}.</p><p>Send it again and the time changes, because the server builds the page for every request.</p>` },
+    "/hello.html": { code: 200, handler: "<p>There is a file at <code>wwwroot/hello.html</code>. No C# runs. The server sends the file exactly as it is stored.</p>",
+      headers: ["Content-Length: 174", "Content-Type: text/html"],
+      body: () => '<!DOCTYPE html>\n<html lang="en">\n<head>\n    <title>Hello</title>\n</head>\n<body>\n    <h1>Hello</h1>\n    <p>This page is the same for everyone, every time.</p>\n</body>\n</html>',
+      shows: () => "<p>The heading Hello and the line: This page is the same for everyone, every time. This is the whole file, so nothing in the response was skipped.</p>" },
+    "/Shop/Hours": { code: 200, handler: "<p>The path /Shop/Hours goes to <code>Pages/Shop/Hours.cshtml</code>: the folder Shop, then the file Hours. The folders under Pages become the parts of the path.</p>",
+      headers: ["Content-Type: text/html; charset=utf-8"],
+      body: () => '<!DOCTYPE html>\n<html lang="en">\n...\n    <title>Hours - Demos</title>\n...\n<h1>Shop Hours</h1>\n<p>Open 7 a.m. to 2 p.m. every day.</p>\n...',
+      shows: () => "<p>The heading Shop Hours and the line: Open 7 a.m. to 2 p.m. every day.</p>" },
+    "/Shop/Hourz": { code: 404, handler: "<p>There is no page at <code>Pages/Shop/Hourz.cshtml</code> and no file at <code>wwwroot/Shop/Hourz</code>. Nothing handles this path.</p>",
+      headers: ["Content-Length: 0"],
+      body: () => "",
+      shows: () => "<p>The response has no body at all (Content-Length: 0), so the browser shows its own page-not-found message instead of a page from your app.</p><p>When you see a 404, check the path for typos first.</p>" },
+    "/Broken": { code: 500, handler: "<p>The path /Broken goes to <code>Pages/Broken.cshtml</code>. <code>BrokenModel.OnGet</code> runs <code>cups[5] = 1;</code> on an array that only has 3 items, and C# throws an exception.</p>",
+      headers: ["Content-Type: text/html; charset=utf-8"],
+      body: () => '<!DOCTYPE html>\n<html lang="en">\n...\n    <title>Internal Server Error</title>\n...\n<h1>An unhandled exception occurred while processing the request.</h1>\n...\nIndexOutOfRangeException: Index was outside the bounds of the array.\n...',
+      shows: () => "<p>The developer error page: An unhandled exception occurred while processing the request, then IndexOutOfRangeException: Index was outside the bounds of the array, with the file and line number.</p><p>You only see this detail page while developing. Read it before anything else when a page crashes.</p>" }
+  };
+  const STATUS = { 200: "200 OK", 404: "404 Not Found", 500: "500 Internal Server Error" };
+
+  const pathSel = document.getElementById("pathSel");
+  const sendBtn = document.getElementById("sendBtn");
+  const nextBtn = document.getElementById("nextBtn");
+  const resetBtn = document.getElementById("resetBtn");
+  const detail = document.getElementById("detail");
+  let step = 0, path = "/", time = "", date = "";
+
+  pathSel.addEventListener("change", () => {
+    document.getElementById("fullUrl").textContent = "http://localhost:5171" + pathSel.value;
+    reset();
+  });
+
+  function badge(code) {
+    return `<span class="badge ${code === 200 ? "ok" : "bad"}">Status ${STATUS[code]}</span>`;
+  }
+
+  function render() {
+    document.querySelectorAll("#steps .step").forEach(li => {
+      const n = Number(li.dataset.step);
+      li.classList.toggle("active", n === step);
+      li.querySelector(".state").textContent = n === step ? "(current step)" : n < step ? "(done)" : "";
+      if (n === step) li.setAttribute("aria-current", "step"); else li.removeAttribute("aria-current");
+    });
+    const r = ROUTES[path];
+    let html = "";
+    if (step === 1) {
+      html = `<p>The browser opens a connection to localhost on port 5171 and sends a GET request. The first line names the method, the path, and the HTTP version.</p>
+<pre>${esc(`GET ${path} HTTP/1.1\nHost: localhost:5171\nAccept: text/html`)}</pre>`;
+    } else if (step === 2) {
+      html = r.handler;
+    } else if (step === 3) {
+      const lines = [`HTTP/1.1 ${STATUS[r.code]}`].concat(r.headers.slice(0, 1).filter(h => h.startsWith("Content-Length")),
+        r.headers.filter(h => !h.startsWith("Content-Length")), [`Date: ${date}`, "Server: Kestrel"]);
+      const body = r.body(time);
+      html = `<p>${badge(r.code)}</p><p>The response starts with a status line and headers. A blank line separates them from the body.</p>
+<pre>${esc(lines.join("\n") + "\n\n" + (body || "(no body)"))}</pre>`;
+    } else if (step === 4) {
+      html = `<p>${badge(r.code)}</p>` + r.shows(time);
+    }
+    detail.innerHTML = html;
+    scrollable();
+    nextBtn.disabled = step === 0 || step >= 4;
+    resetBtn.disabled = step === 0;
+    if (step >= 4) resetBtn.focus();
+  }
+
+  function reset() { step = 0; render(); detail.innerHTML = "<p>Choose a path and click Send request.</p>"; }
+
+  sendBtn.addEventListener("click", () => {
+    path = pathSel.value; time = clockText(); date = new Date().toUTCString();
+    step = 1; render(); nextBtn.focus();
+  });
+  nextBtn.addEventListener("click", () => { if (step < 4) { step++; render(); } });
+  resetBtn.addEventListener("click", () => { reset(); sendBtn.focus(); });
+</script>
+</body>
+</html>

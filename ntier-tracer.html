@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>N-Tier Tracer</title>
+<style>
+  :root { --green: #215732; --green-bg: #f3f8f4; --ink: #1a1a1a; --muted: #4a4a4a; --line: #888888;
+          --warn: #8a1c1c; --warn-bg: #fdf0f0; --hi: #fff3bf; --code-bg: #f4f4f4; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: #ffffff; color: var(--ink);
+         font-family: Lato, "Segoe UI", Arial, sans-serif; font-size: 16px; line-height: 1.5; }
+  h1 { font-size: 1.35rem; margin: 0 0 4px 0; color: var(--green); }
+  h2 { font-size: 1.1rem; margin: 0 0 6px 0; }
+  p.lead { margin: 0 0 12px 0; color: var(--muted); }
+  .panel { border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin: 10px 0; background: #ffffff; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+  label { display: block; font-weight: bold; margin: 0 0 2px 0; }
+  label.inline { display: inline; font-weight: normal; margin: 0 12px 0 4px; }
+  fieldset { border: 1px solid var(--line); border-radius: 6px; margin: 8px 0; }
+  legend { font-weight: bold; }
+  input[type=text] { padding: 6px 8px; font-size: 1rem; border: 1px solid var(--line); border-radius: 4px; width: 220px; }
+  button { font-size: 1rem; padding: 8px 14px; margin: 6px 6px 0 0; border-radius: 6px; cursor: pointer;
+           border: 2px solid var(--green); background: var(--green); color: #ffffff; }
+  button.secondary { background: #ffffff; color: var(--green); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  :focus-visible { outline: 3px solid #1f6feb; outline-offset: 2px; }
+  pre { background: var(--code-bg); border: 1px solid #cccccc; border-radius: 4px; padding: 10px; margin: 6px 0;
+        overflow-x: auto; font-family: Consolas, Menlo, monospace; font-size: 0.9rem; white-space: pre; }
+  code { font-family: Consolas, Menlo, monospace; background: var(--code-bg); padding: 0 3px; border-radius: 3px; }
+  .layer { border: 2px solid #cccccc; border-radius: 6px; padding: 10px 12px; margin: 8px 0; background: #ffffff; }
+  .layer.active { border-color: var(--green); background: var(--green-bg); }
+  .layer .here { display: none; font-weight: bold; color: var(--green); }
+  .layer.active .here { display: inline; }
+  .layer.stopped { border-color: var(--warn); background: var(--warn-bg); }
+  .note { font-size: 0.92rem; color: var(--muted); }
+  .err { color: var(--warn); }
+  table { border-collapse: collapse; margin: 6px 0; }
+  th, td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; }
+  th { background: #e9ecef; }
+</style>
+</head>
+<body>
+<main>
+  <h1>N-Tier Tracer: Recipe Box</h1>
+  <p class="lead">Add a recipe and follow the request through each layer one step at a time. Then switch the storage to the
+    database version from Module 5 and see which code has to change.</p>
+
+  <div class="panel">
+    <fieldset>
+      <legend>Storage behind IRecipeService</legend>
+      <input type="radio" id="s-mem" name="store" value="mem" checked><label class="inline" for="s-mem">In memory (Module 4)</label>
+      <input type="radio" id="s-db" name="store" value="db"><label class="inline" for="s-db">Database (Module 5)</label>
+    </fieldset>
+    <p style="margin:4px 0 2px 0;font-weight:bold">Registration in Program.cs</p>
+    <pre id="reg" tabindex="0" role="region" aria-label="Registration line in Program.cs"></pre>
+    <div class="row">
+      <div><label for="r-name">Recipe name</label><input type="text" id="r-name" value="Breakfast tacos"></div>
+      <div><label for="r-min">Minutes to make</label><input type="text" id="r-min" value="25" style="width:90px" inputmode="numeric"></div>
+    </div>
+    <button type="button" id="start">Add the recipe</button>
+    <button type="button" class="secondary" id="next" disabled>Next step</button>
+    <button type="button" class="secondary" id="restart">Stop and restart the app</button>
+  </div>
+
+  <p id="status" aria-live="polite" class="panel">Type a recipe and click Add the recipe.</p>
+
+  <div class="layer" id="L-browser">
+    <h2>Browser <span class="here">(the request is here)</span></h2>
+    <pre id="c-browser" tabindex="0" role="region" aria-label="Browser request"></pre>
+  </div>
+  <div class="layer" id="L-pres">
+    <h2>Presentation layer: Pages/Recipes <span class="here">(the request is here)</span></h2>
+    <pre id="c-pres" tabindex="0" role="region" aria-label="Page model code"></pre>
+  </div>
+  <div class="layer" id="L-svc">
+    <h2>Service interface: IRecipeService <span class="here">(the request is here)</span></h2>
+    <pre id="c-svc" tabindex="0" role="region" aria-label="Interface code"></pre>
+  </div>
+  <div class="layer" id="L-data">
+    <h2>Data layer: <span id="data-name">InMemoryRecipeService</span> <span class="here">(the request is here)</span></h2>
+    <pre id="c-data" tabindex="0" role="region" aria-label="Data layer code"></pre>
+    <table><caption class="note" style="text-align:left">Recipes stored right now</caption>
+      <thead><tr><th scope="col">Id</th><th scope="col">Name</th><th scope="col">Minutes</th></tr></thead>
+      <tbody id="store"></tbody></table>
+  </div>
+  <p class="note">The database code is a sketch of what you will write in Module 5. Everything else is the Recipe Box code from the Module 4 Code-Along.</p>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const START = [{ Id: 1, Name: 'Pancakes', Minutes: 20 }, { Id: 2, Name: 'Chicken tortilla soup', Minutes: 45 }, { Id: 3, Name: 'Banana bread', Minutes: 70 }];
+let mem = START.map(r => ({ ...r })), db = START.map(r => ({ ...r }));
+const store = () => document.querySelector('input[name=store]:checked').value;
+const data = () => store() === 'mem' ? mem : db;
+
+const PRES_POST = `public IActionResult OnPost()
+{
+    if (!ModelState.IsValid)
+    {
+        return Page();
+    }
+
+    _recipeService.Add(NewRecipe);
+    return RedirectToPage("Index");
+}`;
+const PRES_GET = `public void OnGet()
+{
+    Recipes = _recipeService.GetAll();
+}`;
+const SVC = `public interface IRecipeService
+{
+    List<Recipe> GetAll();
+    void Add(Recipe recipe);
+}`;
+const MEM_ADD = `public void Add(Recipe recipe)
+{
+    recipe.Id = _recipes.Max(r => r.Id) + 1;
+    _recipes.Add(recipe);
+}`;
+const MEM_GET = `public List<Recipe> GetAll()
+{
+    return _recipes;
+}`;
+const DB_ADD = `public void Add(Recipe recipe)
+{
+    _db.Recipes.Add(recipe);
+    _db.SaveChanges();   // the database assigns the Id
+}`;
+const DB_GET = `public List<Recipe> GetAll()
+{
+    return _db.Recipes.ToList();
+}`;
+
+function showReg() {
+  $('reg').textContent = store() === 'mem'
+    ? 'builder.Services.AddSingleton<IRecipeService, InMemoryRecipeService>();'
+    : 'builder.Services.AddScoped<IRecipeService, DbRecipeService>();   // the only line that changes';
+  $('data-name').textContent = store() === 'mem' ? 'InMemoryRecipeService' : 'DbRecipeService (Module 5)';
+}
+function showStore() {
+  $('store').innerHTML = data().map(r => `<tr><td>${r.Id}</td><td>${r.Name.replace(/</g, '&lt;')}</td><td>${r.Minutes}</td></tr>`).join('');
+}
+function clearLayers() {
+  ['L-browser', 'L-pres', 'L-svc', 'L-data'].forEach(id => $(id).classList.remove('active', 'stopped'));
+  ['c-browser', 'c-pres', 'c-svc', 'c-data'].forEach(id => $(id).textContent = '');
+}
+function activate(id) {
+  ['L-browser', 'L-pres', 'L-svc', 'L-data'].forEach(x => $(x).classList.toggle('active', x === id));
+}
+
+function validate(name, min) {
+  if (name.trim() === '') return 'Enter a recipe name.';
+  if (name.length > 50) return 'The name can be at most 50 characters.';
+  if (min.trim() === '') return "The value '' is invalid.";
+  if (!/^\s*[+-]?\d+\s*$/.test(min)) return "The value '" + min + "' is not valid for Minutes to make.";
+  const m = parseInt(min, 10);
+  if (m < 1 || m > 600) return 'Minutes must be from 1 to 600.';
+  return null;
+}
+
+let steps = [], at = 0;
+function run() {
+  clearLayers();
+  const name = $('r-name').value, min = $('r-min').value, err = validate(name, min);
+  const enc = new URLSearchParams({ 'NewRecipe.Name': name, 'NewRecipe.Minutes': min }).toString();
+  const isMem = store() === 'mem';
+  steps = [
+    () => { activate('L-browser'); $('c-browser').textContent = 'POST /Recipes/Add\n\n' + enc;
+            return 'Step 1 of ' + steps.length + ': the browser posts the form to the Add page.'; },
+    () => { activate('L-pres'); $('c-pres').textContent = 'AddModel\n\n' + PRES_POST;
+            if (err) { $('L-pres').classList.add('stopped');
+              return 'Step 2: AddModel.OnPost runs. Model binding fills NewRecipe, and ModelState.IsValid is false: ' + err +
+                     ' OnPost returns Page(). The request stops in the presentation layer, so the service and the data are never touched.'; }
+            return 'Step 2 of ' + steps.length + ': AddModel.OnPost runs. ModelState.IsValid is true, so it calls _recipeService.Add(NewRecipe). The page only knows the interface.'; },
+  ];
+  if (!err) steps.push(
+    () => { activate('L-svc'); $('c-svc').textContent = SVC;
+            return 'Step 3 of ' + steps.length + ': the call goes through IRecipeService. Dependency injection decided earlier which class sits behind it: ' +
+                   (isMem ? 'InMemoryRecipeService.' : 'the database version.'); },
+    () => { activate('L-data'); $('c-data').textContent = isMem ? MEM_ADD : DB_ADD;
+            const list = data(); const rec = { Id: Math.max(...list.map(r => r.Id), 0) + 1, Name: name, Minutes: parseInt(min, 10) };
+            list.push(rec); showStore();
+            return 'Step 4 of ' + steps.length + ': the data layer stores the recipe with Id ' + rec.Id + (isMem ? ' in its list.' : ' as a new row in the database.'); },
+    () => { activate('L-browser'); $('c-browser').textContent = 'HTTP/1.1 302 Found\nLocation: /Recipes\n\nGET /Recipes';
+            return 'Step 5 of ' + steps.length + ': RedirectToPage("Index") tells the browser to load /Recipes with a fresh GET.'; },
+    () => { activate('L-pres'); $('c-pres').textContent = 'IndexModel\n\n' + PRES_GET; $('c-svc').textContent = SVC;
+            $('c-data').textContent = isMem ? MEM_GET : DB_GET;
+            return 'Step 6 of ' + steps.length + ': IndexModel.OnGet asks the service for every recipe, and the page shows ' + data().length + ' recipes in its table. Done.'; }
+  );
+  at = 0; next();
+}
+function next() {
+  if (at < steps.length) { $('status').textContent = steps[at](); at++; }
+  $('next').disabled = at >= steps.length;
+  if (at >= steps.length) $('start').focus(); else $('next').focus();
+}
+
+$('start').addEventListener('click', run);
+$('next').addEventListener('click', next);
+$('restart').addEventListener('click', () => {
+  clearLayers(); steps = []; at = 0; $('next').disabled = true;
+  if (store() === 'mem') { mem = START.map(r => ({ ...r }));
+    $('status').textContent = 'The app stopped and started again. The in-memory list was rebuilt from the starting code, so any recipes you added are gone.';
+  } else {
+    $('status').textContent = 'The app stopped and started again. The recipes are still there, because they are saved in the database file, not in memory.';
+  }
+  showStore();
+});
+document.querySelectorAll('input[name=store]').forEach(r => r.addEventListener('change', () => {
+  clearLayers(); steps = []; at = 0; $('next').disabled = true; showReg(); showStore();
+  $('status').textContent = store() === 'mem'
+    ? 'Storage is the in-memory list. AddModel and IndexModel did not change.'
+    : 'Storage is now the database version. Look at the code: AddModel and IndexModel did not change. Only the registration line and the data layer class are different.';
+}));
+showReg(); showStore();
+</script>
+</body>
+</html>

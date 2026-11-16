@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Razor Step-Through</title>
+<style>
+  /* Shared look for every INEW simulation. Embedded in Canvas pages with an iframe, so keep it light and plain. */
+  :root { --green: #215732; --green-bg: #f3f8f4; --ink: #1a1a1a; --muted: #4a4a4a; --line: #888888;
+          --warn: #8a1c1c; --warn-bg: #fdf0f0; --hi: #fff3bf; --code-bg: #f4f4f4; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: #ffffff; color: var(--ink);
+         font-family: Lato, "Segoe UI", Arial, sans-serif; font-size: 16px; line-height: 1.5; }
+  h1 { font-size: 1.35rem; margin: 0 0 4px 0; color: var(--green); }
+  h2 { font-size: 1.1rem; margin: 18px 0 6px 0; }
+  p.lead { margin: 0 0 12px 0; color: var(--muted); }
+  .panel { border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin: 10px 0; background: #ffffff; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; }
+  .col { flex: 1 1 280px; min-width: 0; }
+  label { display: block; font-weight: bold; margin: 8px 0 2px 0; }
+  input[type=text], input[type=number], select { width: 100%; max-width: 360px; padding: 6px 8px; font-size: 1rem;
+         border: 1px solid var(--line); border-radius: 4px; }
+  button { font-size: 1rem; padding: 8px 14px; margin: 6px 6px 0 0; border-radius: 6px; cursor: pointer;
+           border: 2px solid var(--green); background: var(--green); color: #ffffff; }
+  button.secondary { background: #ffffff; color: var(--green); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  :focus-visible { outline: 3px solid #1f6feb; outline-offset: 2px; }
+  pre { background: var(--code-bg); border: 1px solid #cccccc; border-radius: 4px; padding: 10px; margin: 6px 0;
+        overflow-x: auto; font-family: Consolas, Menlo, monospace; font-size: 0.92rem; white-space: pre; }
+  pre:focus-visible { outline: 3px solid #1f6feb; }
+  code { font-family: Consolas, Menlo, monospace; background: var(--code-bg); padding: 0 3px; border-radius: 3px; }
+  .step { border: 2px solid #cccccc; border-radius: 6px; padding: 8px 10px; margin: 6px 0; background: #ffffff; }
+  .step.active { border-color: var(--green); background: var(--green-bg); }
+  .step .tag { font-weight: bold; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.9rem; border: 1px solid var(--ink); }
+  .ok { background: #e6f4ea; } .bad { background: var(--warn-bg); color: var(--warn); }
+  .err { color: var(--warn); }
+  .note { font-size: 0.92rem; color: var(--muted); }
+  .hl { background: var(--hi); }
+  table { border-collapse: collapse; margin: 8px 0; }
+  th, td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; }
+  th { background: #e9ecef; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Razor Step-Through</h1>
+  <p class="lead">Step through a Razor page one line at a time. Watch which line runs, what the loop variable holds, and how the HTML grows.</p>
+
+  <div class="panel">
+    <button id="nextBtn" type="button">Next step</button>
+    <button id="backBtn" type="button" class="secondary" disabled>Back</button>
+    <button id="resetBtn" type="button" class="secondary">Start over</button>
+    <p id="stepCount" class="note" style="margin-bottom: 0;">Step 0 of 0</p>
+  </div>
+
+  <div class="row">
+    <div class="col">
+      <h2 id="srcHead">Pizza.cshtml</h2>
+      <pre id="src"></pre>
+    </div>
+    <div class="col">
+      <h2 id="nowHead">What is happening</h2>
+      <div class="panel" aria-live="polite" aria-labelledby="nowHead">
+        <p id="explain">Click Next step to start.</p>
+        <table>
+          <caption style="text-align: left; font-weight: bold; padding-bottom: 4px;">Variables right now</caption>
+          <thead><tr><th scope="col">Variable</th><th scope="col">Value</th></tr></thead>
+          <tbody id="vars"><tr><td colspan="2">None yet</td></tr></tbody>
+        </table>
+      </div>
+      <h2 id="outHead">HTML sent so far</h2>
+      <pre id="out"></pre>
+    </div>
+  </div>
+
+  <p class="note">The final HTML is exactly what a real Razor page with this code sent back, including the spaces at the start of the li lines. Razor keeps the indentation from your .cshtml file, and the browser ignores it.</p>
+</main>
+<script>
+  // No external libraries. Every code block that can scroll gets tabindex="0" so keyboard users can scroll it.
+  document.querySelectorAll('pre').forEach(p => p.setAttribute('tabindex', '0'));
+
+  const SRC = [
+    '@page',
+    '@{',
+    '    var toppings = new List<string> { "Pepperoni", "Mushroom", "Olive" };',
+    '}',
+    '<h2>Your pizza</h2>',
+    '<ul>',
+    '    @foreach (var topping in toppings)',
+    '    {',
+    '        if (topping == "Olive")',
+    '        {',
+    '            <li>@topping (extra charge)</li>',
+    '        }',
+    '        else',
+    '        {',
+    '            <li>@topping</li>',
+    '        }',
+    '    }',
+    '</ul>',
+    '<p>Toppings: @toppings.Count</p>'
+  ];
+  const LIST = '"Pepperoni", "Mushroom", "Olive"';
+  const IND = "            ";   // the li lines keep the 12 spaces from the .cshtml file
+  // Each step: line numbers (0-based) to highlight, explanation, variables, HTML line added (or null).
+  const STEPS = [
+    { hl: [0], text: "@page marks this file as a Razor Page. It does not output anything.", vars: [], add: null },
+    { hl: [1, 2, 3], text: "The @{ } block runs C#. It makes the list. Nothing is sent to the browser.", vars: [["toppings", LIST]], add: null },
+    { hl: [4], text: "Plain HTML is sent as is.", vars: [["toppings", LIST]], add: "<h2>Your pizza</h2>" },
+    { hl: [5], text: "Plain HTML again: the opening ul tag.", vars: [["toppings", LIST]], add: "<ul>" }
+  ];
+  const ITEMS = ["Pepperoni", "Mushroom", "Olive"];
+  ITEMS.forEach((t, i) => {
+    const v = [["toppings", LIST], ["topping", `"${t}" (item ${i + 1} of 3)`]];
+    STEPS.push({ hl: [6], text: i === 0 ? `@foreach starts. topping holds the first item, "${t}".` : `The loop goes around again. topping now holds "${t}".`, vars: v, add: null });
+    const olive = t === "Olive";
+    STEPS.push({ hl: [8], text: `Inside the loop you are already in C#, so this if has no @. topping == "Olive" is ${olive ? "true" : "false"}.`, vars: v.concat([["topping == \"Olive\"", olive ? "true" : "false"]]), add: null });
+    if (olive) {
+      STEPS.push({ hl: [10], text: `The if part runs. @topping becomes ${t}, and the text (extra charge) follows it.`, vars: v, add: `${IND}<li>${t} (extra charge)</li>` });
+    } else {
+      STEPS.push({ hl: [12, 14], text: `The else part runs. @topping becomes ${t}.`, vars: v, add: `${IND}<li>${t}</li>` });
+    }
+  });
+  STEPS.push({ hl: [16], text: "There are no more items, so the loop ends. The loop ran 3 times and sent 3 li lines.", vars: [["toppings", LIST]], add: null });
+  STEPS.push({ hl: [17], text: "Plain HTML: the closing ul tag.", vars: [["toppings", LIST]], add: "</ul>" });
+  STEPS.push({ hl: [18], text: "@toppings.Count is 3, so Razor writes 3. The page is done. The browser only ever sees the HTML on the right.", vars: [["toppings", LIST], ["toppings.Count", "3"]], add: "<p>Toppings: 3</p>" });
+
+  let pos = 0;
+  function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function render() {
+    const st = pos > 0 ? STEPS[pos - 1] : null;
+    const hl = st ? st.hl : [];
+    document.getElementById("src").innerHTML = SRC.map((l, i) => hl.includes(i)
+      ? `<span class="hl">${esc(l)}   &lt;-- running</span>` : esc(l)).join("\n");
+    document.getElementById("explain").textContent = st ? st.text : "Click Next step to start.";
+    const vars = st ? st.vars : [];
+    document.getElementById("vars").innerHTML = vars.length
+      ? vars.map(([n, v]) => `<tr><td><code>${esc(n)}</code></td><td><code>${esc(v)}</code></td></tr>`).join("")
+      : '<tr><td colspan="2">None yet</td></tr>';
+    const out = STEPS.slice(0, pos).filter(s => s.add !== null).map(s => s.add);
+    document.getElementById("out").textContent = out.join("\n");
+    document.getElementById("out").dataset.html = out.join("\n");
+    document.getElementById("stepCount").textContent = `Step ${pos} of ${STEPS.length}`;
+    document.getElementById("nextBtn").disabled = pos >= STEPS.length;
+    document.getElementById("backBtn").disabled = pos === 0;
+  }
+  document.getElementById("nextBtn").addEventListener("click", () => {
+    if (pos < STEPS.length) pos++; render();
+    if (pos >= STEPS.length) document.getElementById("resetBtn").focus();
+  });
+  document.getElementById("backBtn").addEventListener("click", () => { if (pos > 0) pos--; render(); if (pos === 0) document.getElementById("nextBtn").focus(); });
+  document.getElementById("resetBtn").addEventListener("click", () => { pos = 0; render(); document.getElementById("nextBtn").focus(); });
+  render();
+</script>
+</body>
+</html>

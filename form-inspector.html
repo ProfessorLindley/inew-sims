@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Form Inspector</title>
+<style>
+  :root { --green: #215732; --green-bg: #f3f8f4; --ink: #1a1a1a; --muted: #4a4a4a; --line: #888888;
+          --warn: #8a1c1c; --warn-bg: #fdf0f0; --hi: #fff3bf; --code-bg: #f4f4f4; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: #ffffff; color: var(--ink);
+         font-family: Lato, "Segoe UI", Arial, sans-serif; font-size: 16px; line-height: 1.5; }
+  h1 { font-size: 1.35rem; margin: 0 0 4px 0; color: var(--green); }
+  h2 { font-size: 1.1rem; margin: 18px 0 6px 0; }
+  p.lead { margin: 0 0 12px 0; color: var(--muted); }
+  .panel { border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin: 10px 0; background: #ffffff; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; }
+  .col { flex: 1 1 300px; min-width: 0; }
+  label { display: block; font-weight: bold; margin: 8px 0 2px 0; }
+  label.inline { display: inline; font-weight: normal; margin: 0 12px 0 4px; }
+  fieldset { border: 1px solid var(--line); border-radius: 6px; margin: 8px 0; }
+  legend { font-weight: bold; }
+  input[type=text], select { width: 100%; max-width: 360px; padding: 6px 8px; font-size: 1rem;
+         border: 1px solid var(--line); border-radius: 4px; }
+  button { font-size: 1rem; padding: 8px 14px; margin: 10px 6px 0 0; border-radius: 6px; cursor: pointer;
+           border: 2px solid var(--green); background: var(--green); color: #ffffff; }
+  button.secondary { background: #ffffff; color: var(--green); }
+  :focus-visible { outline: 3px solid #1f6feb; outline-offset: 2px; }
+  pre { background: var(--code-bg); border: 1px solid #cccccc; border-radius: 4px; padding: 10px; margin: 6px 0;
+        overflow-x: auto; font-family: Consolas, Menlo, monospace; font-size: 0.92rem; white-space: pre; }
+  code { font-family: Consolas, Menlo, monospace; background: var(--code-bg); padding: 0 3px; border-radius: 3px; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.9rem; border: 1px solid var(--ink); }
+  .ok { background: #e6f4ea; } .bad { background: var(--warn-bg); color: var(--warn); }
+  .err { color: var(--warn); }
+  .note { font-size: 0.92rem; color: var(--muted); }
+  table { border-collapse: collapse; margin: 8px 0; }
+  th, td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; }
+  th { background: #e9ecef; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Form Inspector</h1>
+  <p class="lead">Fill in the Game Night RSVP form and click Submit. Nothing leaves this page. Instead, you see what the browser
+    would send, what model binding puts in your C# object, and what the server's validation says.</p>
+
+  <div class="row">
+    <div class="col">
+      <form id="rsvp" class="panel" novalidate>
+        <h2 style="margin-top:0">Game Night RSVP</h2>
+        <fieldset>
+          <legend>Form method</legend>
+          <input type="radio" id="m-post" name="method" value="post" checked><label class="inline" for="m-post">post</label>
+          <input type="radio" id="m-get" name="method" value="get"><label class="inline" for="m-get">get</label>
+        </fieldset>
+        <label for="f-name">Name</label>
+        <input type="text" id="f-name" value="Maria Lopez">
+        <label for="f-email">Email</label>
+        <input type="text" id="f-email" value="maria@example.com">
+        <label for="f-guests">Number of people</label>
+        <input type="text" id="f-guests" value="2" inputmode="numeric">
+        <label for="f-game">Game</label>
+        <select id="f-game">
+          <option value="">Choose a game</option>
+          <option>Catan</option><option>Codenames</option><option selected>Ticket to Ride</option><option>Uno</option>
+        </select>
+        <p style="margin:10px 0 0 0"><input type="checkbox" id="f-snacks" checked><label class="inline" for="f-snacks">I can bring snacks</label></p>
+        <button type="submit">Submit</button>
+        <button type="button" class="secondary" id="clear">Clear the form</button>
+        <p class="note">Browser checks are turned off here, so you see what the server does with anything you type.</p>
+      </form>
+    </div>
+
+    <div class="col" id="results" aria-live="polite">
+      <div class="panel">
+        <h2 style="margin-top:0">1. What the browser sends</h2>
+        <pre id="out-request" tabindex="0" role="region" aria-label="Request the browser sends">Click Submit to see the request.</pre>
+        <p class="note" id="out-request-note"></p>
+      </div>
+      <div class="panel">
+        <h2 style="margin-top:0">2. What model binding puts in NewRsvp</h2>
+        <pre id="out-bound" tabindex="0" role="region" aria-label="Bound C# object">Waiting for a request.</pre>
+        <p class="note" id="out-bound-note"></p>
+      </div>
+      <div class="panel">
+        <h2 style="margin-top:0">3. ModelState and OnPost</h2>
+        <div id="out-state">Waiting for a request.</div>
+      </div>
+    </div>
+  </div>
+  <p class="note">This matches the Game Night RSVP app from the Module 3 Code-Along. The messages are the ones the real app shows
+    when JavaScript is off, so only the server checks run. The real request also carries cookies and other headers that are left out here.</p>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const csString = s => '"' + s.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+
+// Encode name and value pairs the same way a browser encodes a form (spaces become +).
+function encode(pairs) {
+  return pairs.map(([k, v]) => {
+    const p = new URLSearchParams(); p.append(k, v); return p.toString();
+  }).join('&');
+}
+
+// Server-side rules from Rsvp.cs, checked against the real app with JavaScript off.
+function validate(f) {
+  const errs = {};
+  let guests = 1, guestsBound = true;
+  if (f.name.trim() === '') errs.Name = 'Please enter your name.';
+  else if (f.name.length > 40) errs.Name = 'Your name can be at most 40 characters.';
+  if (f.email.trim() === '') errs.Email = 'Please enter your email.';
+  else {
+    const at = f.email.indexOf('@');
+    if (at <= 0 || at !== f.email.lastIndexOf('@') || at === f.email.length - 1) errs.Email = 'Please enter a valid email address.';
+  }
+  if (f.guests.trim() === '') { errs.Guests = "The value '' is invalid."; guestsBound = false; }
+  else if (!/^\s*[+-]?\d+\s*$/.test(f.guests) || Math.abs(parseInt(f.guests, 10)) > 2147483647) {
+    errs.Guests = "The value '" + f.guests + "' is not valid for Number of people."; guestsBound = false;
+  } else {
+    guests = parseInt(f.guests, 10);
+    if (guests < 1 || guests > 6) errs.Guests = 'Number of people must be from 1 to 6.';
+  }
+  if (f.game === '') errs.Game = 'Please pick a game.';
+  return { errs, guests, guestsBound };
+}
+
+function submit(ev) {
+  if (ev) ev.preventDefault();
+  const f = { method: document.querySelector('input[name=method]:checked').value,
+              name: $('f-name').value, email: $('f-email').value, guests: $('f-guests').value,
+              game: $('f-game').value, snacks: $('f-snacks').checked };
+  const pairs = [['NewRsvp.Name', f.name], ['NewRsvp.Email', f.email], ['NewRsvp.Guests', f.guests],
+                 ['__Invariant', 'NewRsvp.Guests'], ['NewRsvp.Game', f.game]];
+  if (f.snacks) pairs.push(['NewRsvp.BringingSnacks', 'true']);
+  if (f.method === 'post') pairs.push(['__RequestVerificationToken', '(a long random token)']);
+  pairs.push(['NewRsvp.BringingSnacks', 'false']);
+  const body = encode(pairs);
+
+  if (f.method === 'get') {
+    $('out-request').textContent = 'GET /Rsvp?' + body;
+    $('out-request-note').textContent = 'With get, every name and value is added to the address. Anyone looking at the screen or the browser history can read them.';
+    $('out-bound').textContent = 'new Rsvp { }   // nothing bound';
+    $('out-bound-note').textContent = 'A get request runs OnGet, and [BindProperty] skips get requests unless you write [BindProperty(SupportsGet = true)]. That is one more reason forms that save data use post.';
+    $('out-state').innerHTML = '<p>OnGet runs. OnPost does not run, so nothing is checked or saved.</p>';
+    return;
+  }
+
+  $('out-request').textContent = 'POST /Rsvp\nContent-Type: application/x-www-form-urlencoded\n\n' + body;
+  $('out-request-note').textContent = (f.snacks
+    ? 'The checked box sends true, and the hidden input at the end of the form sends false. Model binding uses the first value, true. '
+    : 'The box is not checked, so only the hidden false is sent. ') +
+    '__Invariant tells the server that the number box uses digits without commas, and the token protects against forged requests.';
+
+  const v = validate(f);
+  const nameVal = f.name === '' ? 'null' : csString(f.name);
+  const emailVal = f.email === '' ? 'null' : csString(f.email);
+  const gameVal = f.game === '' ? 'null' : csString(f.game);
+  $('out-bound').textContent =
+    'NewRsvp = new Rsvp\n{\n' +
+    '    Name = ' + nameVal + ',\n' +
+    '    Email = ' + emailVal + ',\n' +
+    '    Guests = ' + v.guests + ',' + (v.guestsBound ? '' : '   // could not convert, so it keeps its starting value') + '\n' +
+    '    Game = ' + gameVal + ',\n' +
+    '    BringingSnacks = ' + (f.snacks ? 'true' : 'false') + '\n};';
+  $('out-bound-note').textContent = 'Empty boxes bind as null. A value that cannot become an int leaves Guests at its starting value, 1, and adds an error.';
+
+  const keys = Object.keys(v.errs);
+  if (keys.length === 0) {
+    $('out-state').innerHTML = '<p><span class="badge ok">ModelState.IsValid is true</span></p>' +
+      '<p>OnPost adds the RSVP to the list and returns <code>RedirectToPage()</code>. The browser loads the page again with a fresh GET, ' +
+      'and the new row shows in the Who is coming table.</p>';
+  } else {
+    const rows = keys.map(k => '<tr><th scope="row">NewRsvp.' + k + '</th><td class="err">' + esc(v.errs[k]) + '</td></tr>').join('');
+    $('out-state').innerHTML = '<p><span class="badge bad">ModelState.IsValid is false</span></p>' +
+      '<table><caption class="note" style="text-align:left">Errors in ModelState</caption><thead><tr><th scope="col">Field</th><th scope="col">Message</th></tr></thead><tbody>' +
+      rows + '</tbody></table>' +
+      '<p>OnPost returns <code>Page()</code>. The form comes back with the values the user typed, and each message shows in its field\'s span. Nothing is saved.</p>';
+  }
+}
+
+$('rsvp').addEventListener('submit', submit);
+$('clear').addEventListener('click', () => {
+  $('f-name').value = ''; $('f-email').value = ''; $('f-guests').value = '1'; $('f-game').value = ''; $('f-snacks').checked = false;
+  $('f-name').focus();
+});
+</script>
+</body>
+</html>

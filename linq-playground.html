@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LINQ Playground</title>
+<style>
+  /* Shared look for every INEW simulation. Embedded in Canvas pages with an iframe, so keep it light and plain. */
+  :root { --green: #215732; --green-bg: #f3f8f4; --ink: #1a1a1a; --muted: #4a4a4a; --line: #888888;
+          --warn: #8a1c1c; --warn-bg: #fdf0f0; --hi: #fff3bf; --code-bg: #f4f4f4; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: #ffffff; color: var(--ink);
+         font-family: Lato, "Segoe UI", Arial, sans-serif; font-size: 16px; line-height: 1.5; }
+  h1 { font-size: 1.35rem; margin: 0 0 4px 0; color: var(--green); }
+  h2 { font-size: 1.1rem; margin: 18px 0 6px 0; }
+  p.lead { margin: 0 0 12px 0; color: var(--muted); }
+  .panel { border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin: 10px 0; background: #ffffff; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; }
+  .col { flex: 1 1 280px; min-width: 0; }
+  label { display: block; font-weight: bold; margin: 8px 0 2px 0; }
+  input[type=text], input[type=number], select { width: 100%; max-width: 360px; padding: 6px 8px; font-size: 1rem;
+         border: 1px solid var(--line); border-radius: 4px; }
+  button { font-size: 1rem; padding: 8px 14px; margin: 6px 6px 0 0; border-radius: 6px; cursor: pointer;
+           border: 2px solid var(--green); background: var(--green); color: #ffffff; }
+  button.secondary { background: #ffffff; color: var(--green); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  :focus-visible { outline: 3px solid #1f6feb; outline-offset: 2px; }
+  pre { background: var(--code-bg); border: 1px solid #cccccc; border-radius: 4px; padding: 10px; margin: 6px 0;
+        overflow-x: auto; font-family: Consolas, Menlo, monospace; font-size: 0.92rem; white-space: pre; }
+  pre:focus-visible { outline: 3px solid #1f6feb; }
+  code { font-family: Consolas, Menlo, monospace; background: var(--code-bg); padding: 0 3px; border-radius: 3px; }
+  .step { border: 2px solid #cccccc; border-radius: 6px; padding: 8px 10px; margin: 6px 0; background: #ffffff; }
+  .step.active { border-color: var(--green); background: var(--green-bg); }
+  .step .tag { font-weight: bold; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.9rem; border: 1px solid var(--ink); }
+  .ok { background: #e6f4ea; } .bad { background: var(--warn-bg); color: var(--warn); }
+  .err { color: var(--warn); }
+  .note { font-size: 0.92rem; color: var(--muted); }
+  .hl { background: var(--hi); }
+  table { border-collapse: collapse; margin: 8px 0; }
+  th, td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; }
+  th { background: #e9ecef; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+</head>
+<body>
+<main>
+  <h1>LINQ Playground</h1>
+  <p class="lead">Pick a filter, a sort order, and what you want back. The C# query and its output update as you choose.</p>
+
+  <table>
+    <caption style="text-align: left; font-weight: bold; padding-bottom: 4px;">The movies list</caption>
+    <thead><tr><th scope="col">Title</th><th scope="col">Year</th><th scope="col">Minutes</th></tr></thead>
+    <tbody id="movieRows"></tbody>
+  </table>
+
+  <div class="panel">
+    <div class="row">
+      <div class="col">
+        <label for="whereSel">1. Where (which movies to keep)</label>
+        <select id="whereSel">
+          <option value="none">No filter (keep every movie)</option>
+          <option value="min-lt-100">m.Minutes &lt; 100</option>
+          <option value="min-lt-110">m.Minutes &lt; 110</option>
+          <option value="min-lt-120">m.Minutes &lt; 120</option>
+          <option value="min-gt-100">m.Minutes &gt; 100</option>
+          <option value="min-gt-110">m.Minutes &gt; 110</option>
+          <option value="min-gt-120">m.Minutes &gt; 120</option>
+          <option value="year-ge-1990">m.Year &gt;= 1990</option>
+          <option value="year-ge-2000">m.Year &gt;= 2000</option>
+          <option value="year-ge-2010">m.Year &gt;= 2010</option>
+          <option value="year-ge-2020">m.Year &gt;= 2020</option>
+        </select>
+      </div>
+      <div class="col">
+        <label for="orderSel">2. Order (how to sort them)</label>
+        <select id="orderSel">
+          <option value="none">Keep the list order</option>
+          <option value="title">OrderBy(m =&gt; m.Title)</option>
+          <option value="year">OrderBy(m =&gt; m.Year)</option>
+          <option value="minutes">OrderBy(m =&gt; m.Minutes)</option>
+          <option value="minutes-desc">OrderByDescending(m =&gt; m.Minutes)</option>
+        </select>
+      </div>
+      <div class="col">
+        <label for="opSel">3. What to get back</label>
+        <select id="opSel">
+          <option value="list">Every movie, with foreach</option>
+          <option value="count">How many: Count()</option>
+          <option value="max">The longest: Max(m =&gt; m.Minutes)</option>
+          <option value="first">The first one: First()</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <h2 id="codeHead">The C# code</h2>
+  <pre id="code"></pre>
+
+  <h2 id="outHead">What the program prints</h2>
+  <div aria-live="polite">
+    <p id="summary"></p>
+    <pre id="output"></pre>
+  </div>
+
+  <p class="note">The output comes from the same rules C# uses. Each combination was run as a real C# program to check it.
+    The code assumes <code>movies</code> is the list above, as on Page 2.2.</p>
+</main>
+<script>
+  // No external libraries. Every code block that can scroll gets tabindex="0" so keyboard users can scroll it.
+  document.querySelectorAll('pre').forEach(p => p.setAttribute('tabindex', '0'));
+
+  const MOVIES = [
+    { Title: "Up", Year: 2009, Minutes: 96 },
+    { Title: "Hidden Figures", Year: 2016, Minutes: 127 },
+    { Title: "The Princess Bride", Year: 1987, Minutes: 98 },
+    { Title: "Apollo 13", Year: 1995, Minutes: 140 },
+    { Title: "Coco", Year: 2017, Minutes: 105 }
+  ];
+
+  const WHERE = {
+    "none": null,
+    "min-lt-100": { code: "m => m.Minutes < 100", test: m => m.Minutes < 100 },
+    "min-lt-110": { code: "m => m.Minutes < 110", test: m => m.Minutes < 110 },
+    "min-lt-120": { code: "m => m.Minutes < 120", test: m => m.Minutes < 120 },
+    "min-gt-100": { code: "m => m.Minutes > 100", test: m => m.Minutes > 100 },
+    "min-gt-110": { code: "m => m.Minutes > 110", test: m => m.Minutes > 110 },
+    "min-gt-120": { code: "m => m.Minutes > 120", test: m => m.Minutes > 120 },
+    "year-ge-1990": { code: "m => m.Year >= 1990", test: m => m.Year >= 1990 },
+    "year-ge-2000": { code: "m => m.Year >= 2000", test: m => m.Year >= 2000 },
+    "year-ge-2010": { code: "m => m.Year >= 2010", test: m => m.Year >= 2010 },
+    "year-ge-2020": { code: "m => m.Year >= 2020", test: m => m.Year >= 2020 }
+  };
+  const ORDER = {
+    "none": null,
+    "title": { code: "OrderBy(m => m.Title)", cmp: (a, b) => a.Title < b.Title ? -1 : a.Title > b.Title ? 1 : 0 },
+    "year": { code: "OrderBy(m => m.Year)", cmp: (a, b) => a.Year - b.Year },
+    "minutes": { code: "OrderBy(m => m.Minutes)", cmp: (a, b) => a.Minutes - b.Minutes },
+    "minutes-desc": { code: "OrderByDescending(m => m.Minutes)", cmp: (a, b) => b.Minutes - a.Minutes }
+  };
+  const EMPTY_ERROR = "System.InvalidOperationException: Sequence contains no elements";
+
+  document.getElementById("movieRows").innerHTML = MOVIES.map(m =>
+    `<tr><td>${m.Title}</td><td>${m.Year}</td><td>${m.Minutes}</td></tr>`).join("");
+
+  // Builds the C# code for one combination. The same text was compiled and run to check the output.
+  function buildCode(w, o, op) {
+    let chain = "movies";
+    const parts = [];
+    if (WHERE[w]) parts.push(`.Where(${WHERE[w].code})`);
+    if (ORDER[o]) parts.push(`.${ORDER[o].code}`);
+    if (op === "list") {
+      const q = parts.length ? chain + "\n    " + parts.join("\n    ") : chain;
+      return `var result = ${q};\n\nforeach (var movie in result)\n{\n    Console.WriteLine($"{movie.Title} ({movie.Year}, {movie.Minutes} min)");\n}`;
+    }
+    const last = op === "count" ? ".Count()" : op === "max" ? ".Max(m => m.Minutes)" : ".First()";
+    const q = chain + "\n    " + parts.concat([last]).join("\n    ");
+    if (op === "count") return `int count = ${q};\n\nConsole.WriteLine($"Count: {count}");`;
+    if (op === "max") return `int longest = ${q};\n\nConsole.WriteLine($"Longest: {longest} minutes");`;
+    return `Movie first = ${q};\n\nConsole.WriteLine($"First: {first.Title}");`;
+  }
+
+  // Runs the same query in JavaScript. Returns { lines, error }.
+  function run(w, o, op) {
+    let seq = MOVIES.slice();
+    if (WHERE[w]) seq = seq.filter(WHERE[w].test);
+    if (ORDER[o]) seq = seq.slice().sort(ORDER[o].cmp);   // Array sort is stable, like OrderBy
+    if (op === "list") return { lines: seq.map(m => `${m.Title} (${m.Year}, ${m.Minutes} min)`), error: null };
+    if (op === "count") return { lines: [`Count: ${seq.length}`], error: null };
+    if (seq.length === 0) return { lines: [], error: EMPTY_ERROR };
+    if (op === "max") return { lines: [`Longest: ${Math.max(...seq.map(m => m.Minutes))} minutes`], error: null };
+    return { lines: [`First: ${seq[0].Title}`], error: null };
+  }
+
+  function update() {
+    const w = whereSel.value, o = orderSel.value, op = opSel.value;
+    document.getElementById("code").textContent = buildCode(w, o, op);
+    const r = run(w, o, op);
+    const out = document.getElementById("output");
+    const summary = document.getElementById("summary");
+    out.classList.remove("err");
+    if (r.error) {
+      out.textContent = "Unhandled exception. " + r.error;
+      out.classList.add("err");
+      summary.textContent = "Error: no movies matched, so there is nothing to take the first of or the maximum of. The program stops with an exception. Only the first line is shown here. A real run prints a stack trace after it.";
+    } else if (op === "list" && r.lines.length === 0) {
+      out.textContent = "";
+      summary.textContent = "No movies matched, so the loop runs zero times and prints nothing. That is not an error.";
+    } else {
+      out.textContent = r.lines.join("\n");
+      summary.textContent = op === "list" ? `The loop runs ${r.lines.length} time${r.lines.length === 1 ? "" : "s"}.` : "One value comes back.";
+    }
+    out.dataset.result = r.error ? "EXCEPTION " + r.error : r.lines.join("\n");
+  }
+  const whereSel = document.getElementById("whereSel");
+  const orderSel = document.getElementById("orderSel");
+  const opSel = document.getElementById("opSel");
+  [whereSel, orderSel, opSel].forEach(s => s.addEventListener("change", update));
+  update();
+</script>
+</body>
+</html>

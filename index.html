@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>INEW Simulations</title>
+<style>
+  /* Shared look for every INEW simulation. Embedded in Canvas pages with an iframe, so keep it light and plain. */
+  :root { --green: #215732; --green-bg: #f3f8f4; --ink: #1a1a1a; --muted: #4a4a4a; --line: #888888;
+          --warn: #8a1c1c; --warn-bg: #fdf0f0; --hi: #fff3bf; --code-bg: #f4f4f4; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: #ffffff; color: var(--ink);
+         font-family: Lato, "Segoe UI", Arial, sans-serif; font-size: 16px; line-height: 1.5; }
+  h1 { font-size: 1.35rem; margin: 0 0 4px 0; color: var(--green); }
+  h2 { font-size: 1.1rem; margin: 18px 0 6px 0; }
+  p.lead { margin: 0 0 12px 0; color: var(--muted); }
+  .panel { border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin: 10px 0; background: #ffffff; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; }
+  .col { flex: 1 1 280px; min-width: 0; }
+  label { display: block; font-weight: bold; margin: 8px 0 2px 0; }
+  input[type=text], input[type=number], select { width: 100%; max-width: 360px; padding: 6px 8px; font-size: 1rem;
+         border: 1px solid var(--line); border-radius: 4px; }
+  button { font-size: 1rem; padding: 8px 14px; margin: 6px 6px 0 0; border-radius: 6px; cursor: pointer;
+           border: 2px solid var(--green); background: var(--green); color: #ffffff; }
+  button.secondary { background: #ffffff; color: var(--green); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  :focus-visible { outline: 3px solid #1f6feb; outline-offset: 2px; }
+  pre { background: var(--code-bg); border: 1px solid #cccccc; border-radius: 4px; padding: 10px; margin: 6px 0;
+        overflow-x: auto; font-family: Consolas, Menlo, monospace; font-size: 0.92rem; white-space: pre; }
+  pre:focus-visible { outline: 3px solid #1f6feb; }
+  code { font-family: Consolas, Menlo, monospace; background: var(--code-bg); padding: 0 3px; border-radius: 3px; }
+  .step { border: 2px solid #cccccc; border-radius: 6px; padding: 8px 10px; margin: 6px 0; background: #ffffff; }
+  .step.active { border-color: var(--green); background: var(--green-bg); }
+  .step .tag { font-weight: bold; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.9rem; border: 1px solid var(--ink); }
+  .ok { background: #e6f4ea; } .bad { background: var(--warn-bg); color: var(--warn); }
+  .err { color: var(--warn); }
+  .note { font-size: 0.92rem; color: var(--muted); }
+  .hl { background: var(--hi); }
+  table { border-collapse: collapse; margin: 8px 0; }
+  th, td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; }
+  th { background: #e9ecef; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+</head>
+<body>
+<main>
+  <h1>INEW 1340 and 2334 Simulations</h1>
+  <p class="lead">Interactive practice for Midland College's ASP.NET courses. Each one is also embedded in its Canvas page.</p>
+  <ul>
+    <li><a href="request-response.html">Request and Response</a> (Module 1, page 1.1)</li>
+    <li><a href="static-vs-dynamic.html">Static vs. Dynamic</a> (Module 1, page 1.2)</li>
+    <li><a href="linq-playground.html">LINQ Playground</a> (Module 2, page 2.2)</li>
+    <li><a href="razor-step.html">Razor Step-Through</a> (Module 2, page 2.3)</li>
+    <li><a href="form-inspector.html">Form Inspector</a> (Module 3, page 3.5)</li>
+    <li><a href="ntier-tracer.html">N-Tier Tracer</a> (Module 4, page 4.2)</li>
+    <li><a href="di-lifetimes.html">DI Lifetimes</a> (Module 4, page 4.4)</li>
+  </ul>
+</main>
+</body>
+</html>

@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Static or Built by the Server</title>
+<style>
+  /* Shared look for every INEW simulation. Embedded in Canvas pages with an iframe, so keep it light and plain. */
+  :root { --green: #215732; --green-bg: #f3f8f4; --ink: #1a1a1a; --muted: #4a4a4a; --line: #888888;
+          --warn: #8a1c1c; --warn-bg: #fdf0f0; --hi: #fff3bf; --code-bg: #f4f4f4; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: #ffffff; color: var(--ink);
+         font-family: Lato, "Segoe UI", Arial, sans-serif; font-size: 16px; line-height: 1.5; }
+  h1 { font-size: 1.35rem; margin: 0 0 4px 0; color: var(--green); }
+  h2 { font-size: 1.1rem; margin: 18px 0 6px 0; }
+  p.lead { margin: 0 0 12px 0; color: var(--muted); }
+  .panel { border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin: 10px 0; background: #ffffff; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; }
+  .col { flex: 1 1 280px; min-width: 0; }
+  label { display: block; font-weight: bold; margin: 8px 0 2px 0; }
+  input[type=text], input[type=number], select { width: 100%; max-width: 360px; padding: 6px 8px; font-size: 1rem;
+         border: 1px solid var(--line); border-radius: 4px; }
+  button { font-size: 1rem; padding: 8px 14px; margin: 6px 6px 0 0; border-radius: 6px; cursor: pointer;
+           border: 2px solid var(--green); background: var(--green); color: #ffffff; }
+  button.secondary { background: #ffffff; color: var(--green); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  :focus-visible { outline: 3px solid #1f6feb; outline-offset: 2px; }
+  pre { background: var(--code-bg); border: 1px solid #cccccc; border-radius: 4px; padding: 10px; margin: 6px 0;
+        overflow-x: auto; font-family: Consolas, Menlo, monospace; font-size: 0.92rem; white-space: pre; }
+  pre:focus-visible { outline: 3px solid #1f6feb; }
+  code { font-family: Consolas, Menlo, monospace; background: var(--code-bg); padding: 0 3px; border-radius: 3px; }
+  .step { border: 2px solid #cccccc; border-radius: 6px; padding: 8px 10px; margin: 6px 0; background: #ffffff; }
+  .step.active { border-color: var(--green); background: var(--green-bg); }
+  .step .tag { font-weight: bold; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.9rem; border: 1px solid var(--ink); }
+  .ok { background: #e6f4ea; } .bad { background: var(--warn-bg); color: var(--warn); }
+  .err { color: var(--warn); }
+  .note { font-size: 0.92rem; color: var(--muted); }
+  .hl { background: var(--hi); }
+  table { border-collapse: collapse; margin: 8px 0; }
+  th, td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; }
+  th { background: #e9ecef; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Static or Built by the Server?</h1>
+  <p class="lead">Request each page, move the clock forward, and request them again. Watch what the server does each time and what HTML comes back.</p>
+
+  <div class="panel">
+    <p style="margin-top: 0;">Time on the server: <code id="clock" aria-live="polite">9:00:00 AM</code></p>
+    <button id="wait10" type="button" class="secondary">Wait 10 seconds</button>
+    <button id="wait60" type="button" class="secondary">Wait 1 minute</button>
+    <div style="margin-top: 8px;">
+      <button id="reqStatic" type="button">Request /hello.html</button>
+      <button id="reqClock" type="button">Request /Clock</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col">
+      <h2 id="workHead">What the server did</h2>
+      <div id="work" class="panel" aria-live="polite" aria-labelledby="workHead"><p>No requests yet.</p></div>
+    </div>
+    <div class="col">
+      <h2 id="htmlHead">HTML that came back</h2>
+      <pre id="html">(nothing yet)</pre>
+    </div>
+  </div>
+
+  <h2>Request log</h2>
+  <table>
+    <caption style="text-align: left; font-weight: bold; padding-bottom: 4px;">Every request so far</caption>
+    <thead><tr><th scope="col">#</th><th scope="col">Server time</th><th scope="col">Page</th><th scope="col">Key line in the HTML</th><th scope="col">Same as last time?</th></tr></thead>
+    <tbody id="log"></tbody>
+  </table>
+
+  <p class="note">The page contents match the demo app from Pages 1.1 and 1.2. The Clock page also sends the shared layout around these lines, which is left out here. On a real server the clock moves by itself; here you move it with the buttons.</p>
+</main>
+<script>
+  // No external libraries. Every code block that can scroll gets tabindex="0" so keyboard users can scroll it.
+  document.querySelectorAll('pre').forEach(p => p.setAttribute('tabindex', '0'));
+
+  const STATIC_HTML = '<!DOCTYPE html>\n<html lang="en">\n<head>\n    <title>Hello</title>\n</head>\n<body>\n    <h1>Hello</h1>\n    <p>This page is the same for everyone, every time.</p>\n</body>\n</html>';
+  let seconds = 9 * 3600;               // 9:00:00 AM
+  let count = 0;
+  const last = {};                      // key line from the last request of each page
+
+  function timeText() {
+    const h24 = Math.floor(seconds / 3600) % 24, m = Math.floor(seconds / 60) % 60, s = seconds % 60;
+    const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+    return `${h12}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")} ${h24 < 12 ? "AM" : "PM"}`;
+  }
+  function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function wait(n) { seconds += n; document.getElementById("clock").textContent = timeText(); }
+
+  function request(page) {
+    count++;
+    const t = timeText();
+    let work, html, key;
+    if (page === "/hello.html") {
+      work = `<ol>
+  <li>Find the file <code>wwwroot/hello.html</code>.</li>
+  <li>Send it exactly as it is stored. No C# runs.</li>
+</ol>`;
+      html = STATIC_HTML;
+      key = "<p>This page is the same for everyone, every time.</p>";
+    } else {
+      work = `<ol>
+  <li>Find <code>Pages/Clock.cshtml</code> and create a <code>ClockModel</code>.</li>
+  <li>Run <code>OnGet()</code>: <code>ServerTime = DateTime.Now.ToString("h:mm:ss tt");</code> gives <code>"${t}"</code>.</li>
+  <li>Run the Razor page, which puts <code>@Model.ServerTime</code> into the HTML.</li>
+  <li>Send the finished HTML. The browser never sees the C#.</li>
+</ol>`;
+      key = `<p>The server built this page at ${t}.</p>`;
+      html = `<h1>Server Clock</h1>\n${key}`;
+    }
+    const same = last[page] === undefined ? "First request" : (last[page] === key ? "Yes" : "No, it changed");
+    last[page] = key;
+    document.getElementById("work").innerHTML = `<p>Request ${count}: <code>GET ${page}</code> at ${t}</p>` + work;
+    document.getElementById("html").textContent = html;
+    const row = document.createElement("tr");
+    row.innerHTML = `<td>${count}</td><td>${t}</td><td>${page}</td><td><code>${esc(key)}</code></td><td>${same}</td>`;
+    document.getElementById("log").appendChild(row);
+  }
+
+  document.getElementById("wait10").addEventListener("click", () => wait(10));
+  document.getElementById("wait60").addEventListener("click", () => wait(60));
+  document.getElementById("reqStatic").addEventListener("click", () => request("/hello.html"));
+  document.getElementById("reqClock").addEventListener("click", () => request("/Clock"));
+</script>
+</body>
+</html>
