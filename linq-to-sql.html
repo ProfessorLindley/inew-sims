@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LINQ to SQL</title>
+<style>
+  /* Shared look for every INEW simulation. Embedded in Canvas pages with an iframe, so keep it light and plain. */
+  :root { --green: #215732; --green-bg: #f3f8f4; --ink: #1a1a1a; --muted: #4a4a4a; --line: #888888;
+          --warn: #8a1c1c; --warn-bg: #fdf0f0; --hi: #fff3bf; --code-bg: #f4f4f4; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: #ffffff; color: var(--ink);
+         font-family: Lato, "Segoe UI", Arial, sans-serif; font-size: 16px; line-height: 1.5; }
+  h1 { font-size: 1.35rem; margin: 0 0 4px 0; color: var(--green); }
+  h2 { font-size: 1.1rem; margin: 18px 0 6px 0; }
+  p.lead { margin: 0 0 12px 0; color: var(--muted); }
+  .panel { border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin: 10px 0; background: #ffffff; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; }
+  .col { flex: 1 1 280px; min-width: 0; }
+  label { display: block; font-weight: bold; margin: 8px 0 2px 0; }
+  input[type=text], input[type=number], select { width: 100%; max-width: 360px; padding: 6px 8px; font-size: 1rem;
+         border: 1px solid var(--line); border-radius: 4px; }
+  button { font-size: 1rem; padding: 8px 14px; margin: 6px 6px 0 0; border-radius: 6px; cursor: pointer;
+           border: 2px solid var(--green); background: var(--green); color: #ffffff; }
+  button.secondary { background: #ffffff; color: var(--green); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  :focus-visible { outline: 3px solid #1f6feb; outline-offset: 2px; }
+  pre { background: var(--code-bg); border: 1px solid #cccccc; border-radius: 4px; padding: 10px; margin: 6px 0;
+        overflow-x: auto; font-family: Consolas, Menlo, monospace; font-size: 0.92rem; white-space: pre; }
+  pre:focus-visible { outline: 3px solid #1f6feb; }
+  code { font-family: Consolas, Menlo, monospace; background: var(--code-bg); padding: 0 3px; border-radius: 3px; }
+  .step { border: 2px solid #cccccc; border-radius: 6px; padding: 8px 10px; margin: 6px 0; background: #ffffff; }
+  .step.active { border-color: var(--green); background: var(--green-bg); }
+  .step .tag { font-weight: bold; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.9rem; border: 1px solid var(--ink); }
+  .ok { background: #e6f4ea; } .bad { background: var(--warn-bg); color: var(--warn); }
+  .err { color: var(--warn); }
+  .note { font-size: 0.92rem; color: var(--muted); }
+  .hl { background: var(--hi); }
+  table { border-collapse: collapse; margin: 8px 0; }
+  th, td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; }
+  th { background: #e9ecef; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+</head>
+<body>
+<main>
+  <h1>LINQ to SQL</h1>
+  <p class="lead">Pick a query and read the C# first. Try to predict what SQL EF Core will send, then click Run the query to compare.</p>
+  <div class="panel">
+    <label for="pick">Query</label>
+    <select id="pick">
+          <option value="employees">Get every employee</option>
+          <option value="orderby">Certifications, soonest to expire first</option>
+          <option value="where">Certifications that expire before March 1, 2027</option>
+          <option value="include1">Certifications with their employee (Include)</option>
+          <option value="include2">Certifications with employee and type, sorted</option>
+          <option value="navwhere">Only CPR and First Aid certifications</option>
+          <option value="count">Count the certifications</option>
+          <option value="employeecerts">One employee and all of her certifications</option>
+    </select>
+    <h2>The C# in your service</h2>
+    <pre id="cs" tabindex="0" role="region" aria-label="C# query"></pre>
+    <button type="button" id="run">Run the query</button>
+  </div>
+  <div id="out" aria-live="polite">
+    <p class="panel">Click Run the query to see the SQL and the results.</p>
+  </div>
+  <p class="note">The SQL, parameters, and results were captured from a real CertTrack-style app using EF Core 10 and SQLite with fixed sample data.
+    In the certification queries, the two right-hand columns show what C# sees in each object's Employee and CertificationType properties after the query runs.</p>
+</main>
+<script>
+const DATA = [{"key": "employees", "label": "Get every employee", "csharp": "var employees = _db.Employees.ToList();", "sql": "SELECT \"e\".\"Id\", \"e\".\"Department\", \"e\".\"Name\"\nFROM \"Employees\" AS \"e\"", "params": "", "cols": ["Id", "Name", "Department"], "rows": [["1", "Ana Torres", "Nursing"], ["2", "Ben Carter", "Warehouse"], ["3", "Chloe Nguyen", "null"]], "note": "One SELECT for the whole Employees table. Chloe Nguyen has no department, so Department comes back null."}, {"key": "orderby", "label": "Certifications, soonest to expire first", "csharp": "var certs = _db.Certifications\n    .OrderBy(c => c.ExpiresOn)\n    .ToList();", "sql": "SELECT \"c\".\"Id\", \"c\".\"CertificationTypeId\", \"c\".\"EmployeeId\", \"c\".\"ExpiresOn\", \"c\".\"IssuedOn\", \"c\".\"Notes\"\nFROM \"Certifications\" AS \"c\"\nORDER BY \"c\".\"ExpiresOn\"", "params": "", "cols": ["Id", "EmployeeId", "CertificationTypeId", "IssuedOn", "ExpiresOn", "c.Employee?.Name", "c.CertificationType?.Name"], "rows": [["5", "2", "1", "2024-12-05", "2026-12-05", "null", "null"], ["1", "1", "1", "2025-01-10", "2027-01-10", "null", "null"], ["2", "2", "3", "2024-02-01", "2027-02-01", "null", "null"], ["4", "1", "4", "2023-03-01", "2028-03-01", "null", "null"], ["3", "3", "2", "2025-08-15", "2028-08-15", "null", "null"]], "note": "The sorting happens in the database with ORDER BY. Notice the last two columns: without Include, EF Core does not load the related employee or type, so those navigation properties are null."}, {"key": "where", "label": "Certifications that expire before March 1, 2027", "csharp": "DateTime cutoff = new DateTime(2027, 3, 1);\nvar certs = _db.Certifications\n    .Where(c => c.ExpiresOn < cutoff)\n    .ToList();", "sql": "SELECT \"c\".\"Id\", \"c\".\"CertificationTypeId\", \"c\".\"EmployeeId\", \"c\".\"ExpiresOn\", \"c\".\"IssuedOn\", \"c\".\"Notes\"\nFROM \"Certifications\" AS \"c\"\nWHERE \"c\".\"ExpiresOn\" < @cutoff", "params": "@cutoff='2027-03-01T00:00:00.0000000' (DbType = DateTime)", "cols": ["Id", "EmployeeId", "CertificationTypeId", "IssuedOn", "ExpiresOn", "c.Employee?.Name", "c.CertificationType?.Name"], "rows": [["1", "1", "1", "2025-01-10", "2027-01-10", "null", "null"], ["2", "2", "3", "2024-02-01", "2027-02-01", "null", "null"], ["5", "2", "1", "2024-12-05", "2026-12-05", "null", "null"]], "note": "The cutoff date is sent as a parameter named @cutoff, separate from the SQL text. Parameters are also what keep user input from being treated as SQL."}, {"key": "include1", "label": "Certifications with their employee (Include)", "csharp": "var certs = _db.Certifications\n    .Include(c => c.Employee)\n    .ToList();", "sql": "SELECT \"c\".\"Id\", \"c\".\"CertificationTypeId\", \"c\".\"EmployeeId\", \"c\".\"ExpiresOn\", \"c\".\"IssuedOn\", \"c\".\"Notes\", \"e\".\"Id\", \"e\".\"Department\", \"e\".\"Name\"\nFROM \"Certifications\" AS \"c\"\nINNER JOIN \"Employees\" AS \"e\" ON \"c\".\"EmployeeId\" = \"e\".\"Id\"", "params": "", "cols": ["Id", "EmployeeId", "CertificationTypeId", "IssuedOn", "ExpiresOn", "c.Employee?.Name", "c.CertificationType?.Name"], "rows": [["1", "1", "1", "2025-01-10", "2027-01-10", "Ana Torres", "null"], ["2", "2", "3", "2024-02-01", "2027-02-01", "Ben Carter", "null"], ["3", "3", "2", "2025-08-15", "2028-08-15", "Chloe Nguyen", "null"], ["4", "1", "4", "2023-03-01", "2028-03-01", "Ana Torres", "null"], ["5", "2", "1", "2024-12-05", "2026-12-05", "Ben Carter", "null"]], "note": "Include(c => c.Employee) adds an INNER JOIN to the Employees table, and now c.Employee is filled in for every row."}, {"key": "include2", "label": "Certifications with employee and type, sorted", "csharp": "var certs = _db.Certifications\n    .Include(c => c.Employee)\n    .Include(c => c.CertificationType)\n    .OrderBy(c => c.ExpiresOn)\n    .ToList();", "sql": "SELECT \"c\".\"Id\", \"c\".\"CertificationTypeId\", \"c\".\"EmployeeId\", \"c\".\"ExpiresOn\", \"c\".\"IssuedOn\", \"c\".\"Notes\", \"e\".\"Id\", \"e\".\"Department\", \"e\".\"Name\", \"c0\".\"Id\", \"c0\".\"Name\", \"c0\".\"ValidMonths\"\nFROM \"Certifications\" AS \"c\"\nINNER JOIN \"Employees\" AS \"e\" ON \"c\".\"EmployeeId\" = \"e\".\"Id\"\nINNER JOIN \"CertificationTypes\" AS \"c0\" ON \"c\".\"CertificationTypeId\" = \"c0\".\"Id\"\nORDER BY \"c\".\"ExpiresOn\"", "params": "", "cols": ["Id", "EmployeeId", "CertificationTypeId", "IssuedOn", "ExpiresOn", "c.Employee?.Name", "c.CertificationType?.Name"], "rows": [["5", "2", "1", "2024-12-05", "2026-12-05", "Ben Carter", "CPR and First Aid"], ["1", "1", "1", "2025-01-10", "2027-01-10", "Ana Torres", "CPR and First Aid"], ["2", "2", "3", "2024-02-01", "2027-02-01", "Ben Carter", "Forklift Operator"], ["4", "1", "4", "2023-03-01", "2028-03-01", "Ana Torres", "OSHA 10"], ["3", "3", "2", "2025-08-15", "2028-08-15", "Chloe Nguyen", "Food Handler"]], "note": "Two Includes, two joins. EF Core names the second table c0 because c is already taken by Certifications."}, {"key": "navwhere", "label": "Only CPR and First Aid certifications", "csharp": "var cprCerts = _db.Certifications\n    .Include(c => c.Employee)\n    .Where(c => c.CertificationType!.Name == \"CPR and First Aid\")\n    .ToList();", "sql": "SELECT \"c\".\"Id\", \"c\".\"CertificationTypeId\", \"c\".\"EmployeeId\", \"c\".\"ExpiresOn\", \"c\".\"IssuedOn\", \"c\".\"Notes\", \"e\".\"Id\", \"e\".\"Department\", \"e\".\"Name\"\nFROM \"Certifications\" AS \"c\"\nINNER JOIN \"CertificationTypes\" AS \"c0\" ON \"c\".\"CertificationTypeId\" = \"c0\".\"Id\"\nINNER JOIN \"Employees\" AS \"e\" ON \"c\".\"EmployeeId\" = \"e\".\"Id\"\nWHERE \"c0\".\"Name\" = 'CPR and First Aid'", "params": "", "cols": ["Id", "EmployeeId", "CertificationTypeId", "IssuedOn", "ExpiresOn", "c.Employee?.Name", "c.CertificationType?.Name"], "rows": [["1", "1", "1", "2025-01-10", "2027-01-10", "Ana Torres", "null"], ["5", "2", "1", "2024-12-05", "2026-12-05", "Ben Carter", "null"]], "note": "Filtering through c.CertificationType!.Name makes EF Core join CertificationTypes, but only to filter. The type is not loaded, so c.CertificationType is still null. Add Include(c => c.CertificationType) if you need it."}, {"key": "count", "label": "Count the certifications", "csharp": "int total = _db.Certifications.Count();", "sql": "SELECT COUNT(*)\nFROM \"Certifications\" AS \"c\"", "params": "", "cols": ["total"], "rows": [["5"]], "note": "Count() runs COUNT(*) in the database. One number comes back instead of five rows."}, {"key": "employeecerts", "label": "One employee and all of her certifications", "csharp": "var ana = _db.Employees\n    .Include(e => e.Certifications)\n    .First(e => e.Name == \"Ana Torres\");", "sql": "SELECT \"e0\".\"Id\", \"e0\".\"Department\", \"e0\".\"Name\", \"c\".\"Id\", \"c\".\"CertificationTypeId\", \"c\".\"EmployeeId\", \"c\".\"ExpiresOn\", \"c\".\"IssuedOn\", \"c\".\"Notes\"\nFROM (\n    SELECT \"e\".\"Id\", \"e\".\"Department\", \"e\".\"Name\"\n    FROM \"Employees\" AS \"e\"\n    WHERE \"e\".\"Name\" = 'Ana Torres'\n    LIMIT 1\n) AS \"e0\"\nLEFT JOIN \"Certifications\" AS \"c\" ON \"e0\".\"Id\" = \"c\".\"EmployeeId\"\nORDER BY \"e0\".\"Id\"", "params": "", "cols": ["ana.Name", "ana.Certifications.Count", "Certification Ids"], "rows": [["Ana Torres", "2", "1, 4"]], "note": "First() becomes LIMIT 1, and including a list uses a LEFT JOIN, so an employee with no certifications would still come back."}];
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const cur = () => DATA.find(d => d.key === $('pick').value);
+function showCs() {
+  $('cs').textContent = cur().csharp;
+  $('out').innerHTML = '<p class="panel">Click Run the query to see the SQL and the results.</p>';
+}
+function run() {
+  const d = cur();
+  const head = d.cols.map(c => '<th scope="col">' + esc(c) + '</th>').join('');
+  const body = d.rows.map(r => '<tr>' + r.map(v => '<td>' + esc(v) + '</td>').join('') + '</tr>').join('');
+  $('out').innerHTML =
+    '<div class="panel"><h2 style="margin-top:0">The SQL EF Core sent to SQLite</h2>' +
+    '<pre tabindex="0" role="region" aria-label="SQL sent to the database">' + esc(d.sql) + '</pre>' +
+    '<p class="note">Parameters: ' + (d.params ? esc(d.params) : 'none') + '</p></div>' +
+    '<div class="panel"><h2 style="margin-top:0">What came back (' + d.rows.length + (d.rows.length === 1 ? ' row' : ' rows') + ')</h2>' +
+    '<div style="overflow-x:auto" tabindex="0" role="region" aria-label="Results table"><table><caption class="note" style="text-align:left">Results of ' + esc(d.label) + '</caption>' +
+    '<thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table></div>' +
+    '<p>' + esc(d.note) + '</p></div>';
+}
+$('pick').addEventListener('change', showCs);
+$('run').addEventListener('click', run);
+showCs();
+</script>
+</body>
+</html>

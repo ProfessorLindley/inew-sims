@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Normalization Explorer</title>
+<style>
+  /* Shared look for every INEW simulation. Embedded in Canvas pages with an iframe, so keep it light and plain. */
+  :root { --green: #215732; --green-bg: #f3f8f4; --ink: #1a1a1a; --muted: #4a4a4a; --line: #888888;
+          --warn: #8a1c1c; --warn-bg: #fdf0f0; --hi: #fff3bf; --code-bg: #f4f4f4; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: #ffffff; color: var(--ink);
+         font-family: Lato, "Segoe UI", Arial, sans-serif; font-size: 16px; line-height: 1.5; }
+  h1 { font-size: 1.35rem; margin: 0 0 4px 0; color: var(--green); }
+  h2 { font-size: 1.1rem; margin: 18px 0 6px 0; }
+  p.lead { margin: 0 0 12px 0; color: var(--muted); }
+  .panel { border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin: 10px 0; background: #ffffff; }
+  button { font-size: 1rem; padding: 8px 14px; margin: 6px 6px 0 0; border-radius: 6px; cursor: pointer;
+           border: 2px solid var(--green); background: var(--green); color: #ffffff; }
+  button.secondary { background: #ffffff; color: var(--green); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  :focus-visible { outline: 3px solid #1f6feb; outline-offset: 2px; }
+  code { font-family: Consolas, Menlo, monospace; background: var(--code-bg); padding: 0 3px; border-radius: 3px; }
+  .note { font-size: 0.92rem; color: var(--muted); }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; margin: 8px 0; }
+  caption { text-align: left; font-weight: bold; padding-bottom: 4px; }
+  th, td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; }
+  th { background: #e9ecef; }
+  td.changed { background: #e6f4ea; }
+  td.missed { background: var(--warn-bg); color: var(--warn); }
+  td.odd { background: var(--hi); }
+  td.key { background: var(--green-bg); }
+  .tables { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Normalization Explorer</h1>
+  <p class="lead">Here is how a lot of offices track certifications: one big table, typed by hand. Try a few everyday changes,
+    then split the table into three and try the same changes again.</p>
+
+  <div class="panel">
+    <h2 style="margin-top:0" id="stage-title">Stage 1: One flat table</h2>
+    <div id="controls"></div>
+  </div>
+
+  <p id="status" class="panel" aria-live="polite">Start by answering a question: how many certifications does Ana Torres have?</p>
+
+  <div class="panel">
+    <h2 style="margin-top:0">What is stored right now</h2>
+    <div class="scroll" tabindex="0" role="region" aria-label="Counts"><table id="counts"></table></div>
+  </div>
+
+  <div class="tables" id="tables"></div>
+
+  <p class="note">Cell markers: (changed) means an edit landed there, (not changed) means an edit missed it, (typo) marks text
+    that does not match the other rows, and (key) marks an Id that points to a row in another table.</p>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+const FLAT0 = [
+  { Id: 1, EmployeeName: 'Ana Torres',   Department: 'Nursing',   CertificationName: 'CPR and First Aid', ValidMonths: 24, IssuedOn: '2025-01-10', ExpiresOn: '2027-01-10' },
+  { Id: 2, EmployeeName: 'Ben Carter',   Department: 'Warehouse', CertificationName: 'Forklift Operator', ValidMonths: 36, IssuedOn: '2024-02-01', ExpiresOn: '2027-02-01' },
+  { Id: 3, EmployeeName: 'Chloe Nguyen', Department: '',          CertificationName: 'Food Handler',      ValidMonths: 36, IssuedOn: '2025-08-15', ExpiresOn: '2028-08-15' },
+  { Id: 4, EmployeeName: 'Ana Toress',   Department: 'Nursing',   CertificationName: 'OSHA 10',           ValidMonths: 60, IssuedOn: '2023-03-01', ExpiresOn: '2028-03-01' },
+  { Id: 5, EmployeeName: 'Ben Carter',   Department: 'Warehouse', CertificationName: 'CPR/First Aid',     ValidMonths: 24, IssuedOn: '2024-12-05', ExpiresOn: '2026-12-05' },
+  { Id: 6, EmployeeName: 'Ana Torres',   Department: 'Nursing',   CertificationName: 'Food Handler',      ValidMonths: 36, IssuedOn: '2026-02-20', ExpiresOn: '2029-02-20' },
+];
+const ODD = { 'Ana Toress': 'typo', 'CPR/First Aid': 'typo' };
+const EMP0 = [ { Id: 1, Name: 'Ana Torres', Department: 'Nursing' }, { Id: 2, Name: 'Ben Carter', Department: 'Warehouse' }, { Id: 3, Name: 'Chloe Nguyen', Department: '' } ];
+const TYPE0 = [ { Id: 1, Name: 'CPR and First Aid', ValidMonths: 24 }, { Id: 2, Name: 'Food Handler', ValidMonths: 36 },
+                { Id: 3, Name: 'Forklift Operator', ValidMonths: 36 }, { Id: 4, Name: 'OSHA 10', ValidMonths: 60 } ];
+const EMP_OF = { 'Ana Torres': 1, 'Ana Toress': 1, 'Ben Carter': 2, 'Chloe Nguyen': 3 };
+const TYPE_OF = { 'CPR and First Aid': 1, 'CPR/First Aid': 1, 'Food Handler': 2, 'Forklift Operator': 3, 'OSHA 10': 4 };
+
+let stage, step, flat, emps, types, marks;   // marks: { "table:id:col": "changed" | "missed" }
+function reset() {
+  stage = 1; step = 0; flat = FLAT0.map(r => ({ ...r })); emps = null; types = null; marks = {};
+}
+
+function cell(table, row, col, val) {
+  const m = marks[table + ':' + row.Id + ':' + col];
+  let cls = '', tag = '';
+  if (m === 'changed') { cls = 'changed'; tag = ' (changed)'; }
+  else if (m === 'missed') { cls = 'missed'; tag = ' (not changed)'; }
+  else if (m === 'key') { cls = 'key'; tag = ' (key)'; }
+  else if (stage === 1 && ODD[val]) { cls = 'odd'; tag = ' (typo)'; }
+  return '<td' + (cls ? ' class="' + cls + '"' : '') + '>' + (val === '' ? '<span class="note">(blank)</span>' : esc(val)) + tag + '</td>';
+}
+function tableHtml(name, caption, cols, rows) {
+  return '<div class="scroll" tabindex="0" role="region" aria-label="' + esc(caption) + '"><table><caption>' + esc(caption) + '</caption><thead><tr>' +
+    cols.map(c => '<th scope="col">' + c + '</th>').join('') + '</tr></thead><tbody>' +
+    rows.map(r => '<tr>' + cols.map(c => cell(name, r, c, r[c])).join('') + '</tr>').join('') + '</tbody></table></div>';
+}
+
+function certRows() {
+  return FLAT0.map(r => ({ Id: r.Id, EmployeeId: EMP_OF[r.EmployeeName], CertificationTypeId: TYPE_OF[r.CertificationName],
+                           IssuedOn: r.IssuedOn, ExpiresOn: r.ExpiresOn }));
+}
+function joined() {   // what a query with Include gives you
+  return certRows().map(c => ({ Id: c.Id, Employee: emps.find(e => e.Id === c.EmployeeId).Name,
+                                Certification: types.find(t => t.Id === c.CertificationTypeId).Name, ExpiresOn: c.ExpiresOn }));
+}
+
+function counts() {
+  let rows;
+  if (stage === 1) {
+    const names = new Set(flat.map(r => r.EmployeeName)), certs = new Set(flat.map(r => r.CertificationName));
+    rows = [['Tables', '1'], ['Rows', String(flat.length)], ['Times an employee name is typed', String(flat.length)],
+            ['Different spellings of employee names', names.size + ' (for 3 real people)'],
+            ['Times a certification name is typed', String(flat.length)],
+            ['Different spellings of certification names', certs.size + ' (for 4 real certifications)']];
+  } else {
+    rows = [['Tables', step >= 3 ? '3' : String(1 + step)],
+            ['Rows', step >= 3 ? 'Employees 3, CertificationTypes 4, Certifications 6' : (step === 2 ? 'Employees 3, CertificationTypes 4, Certifications 6 (still being split)' : 'Employees 3, flat rows 6')],
+            ['Times an employee name is typed', '3 (once per person)'],
+            ['Different spellings of employee names', '3 (for 3 real people)'],
+            ['Times a certification name is typed', step >= 2 ? '4 (once per type)' : '6'],
+            ['Different spellings of certification names', step >= 2 ? '4 (for 4 real certifications)' : '5 (for 4 real certifications)']];
+  }
+  $('counts').innerHTML = '<caption>Counts</caption><thead><tr><th scope="col">Measure</th><th scope="col">Value</th></tr></thead><tbody>' +
+    rows.map(r => '<tr><th scope="row">' + r[0] + '</th><td>' + esc(r[1]) + '</td></tr>').join('') + '</tbody>';
+}
+
+function render() {
+  counts();
+  let h = '';
+  if (stage === 1) {
+    h = tableHtml('flat', 'CertificationLog (one flat table)', ['Id', 'EmployeeName', 'Department', 'CertificationName', 'ValidMonths', 'IssuedOn', 'ExpiresOn'], flat);
+  } else {
+    h += tableHtml('emp', 'Employees', ['Id', 'Name', 'Department'], emps);
+    if (step >= 2) h += tableHtml('type', 'CertificationTypes', ['Id', 'Name', 'ValidMonths'], types);
+    if (step >= 3) {
+      h += tableHtml('cert', 'Certifications', ['Id', 'EmployeeId', 'CertificationTypeId', 'IssuedOn', 'ExpiresOn'], certRows());
+      h += tableHtml('join', 'Certifications joined with Employees and CertificationTypes (what Include gives you)', ['Id', 'Employee', 'Certification', 'ExpiresOn'], joined());
+    }
+  }
+  $('tables').innerHTML = h;
+  controls();
+}
+
+function btn(id, text, secondary) { return '<button type="button" id="' + id + '"' + (secondary ? ' class="secondary"' : '') + '>' + text + '</button>'; }
+function controls() {
+  const keep = document.activeElement && document.activeElement.id;
+  let c = '';
+  if (stage === 1) {
+    $('stage-title').textContent = 'Stage 1: One flat table';
+    c = '<p style="margin:0">Try these, then split the table.</p>' +
+        btn('count-ana', 'Count Ana Torres\'s certifications') + btn('rename-all', 'Rename Ben Carter, every row') +
+        btn('rename-miss', 'Rename Ben Carter, miss a row') + btn('move-ana', 'Move Ana to Emergency') +
+        '<br>' + btn('split', 'Start splitting the table') + btn('reset1', 'Undo my changes', true);
+  } else if (step < 3) {
+    $('stage-title').textContent = 'Stage 2: Split the table, step ' + step + ' of 3';
+    c = btn('next', 'Next step') + btn('back-flat', 'Back to the flat table', true);
+  } else {
+    $('stage-title').textContent = 'Stage 3: Three related tables';
+    c = '<p style="margin:0">Now try the same changes.</p>' +
+        btn('count-ana', 'Count Ana Torres\'s certifications') + btn('rename2', 'Rename Ben Carter') + btn('move-ana', 'Move Ana to Emergency') +
+        '<br>' + btn('back-flat', 'Start over with the flat table', true);
+  }
+  $('controls').innerHTML = c;
+  const on = (id, fn) => { const b = $(id); if (b) b.addEventListener('click', fn); };
+  on('count-ana', countAna); on('rename-all', () => renameFlat(false)); on('rename-miss', () => renameFlat(true));
+  on('move-ana', moveAna); on('split', () => { stage = 2; step = 0; nextStep(); }); on('reset1', () => { reset(); render(); say('The flat table is back to how it started.'); });
+  on('next', nextStep); on('back-flat', () => { reset(); render(); say('Back to the one flat table, with the typos still in it.'); $('count-ana').focus(); });
+  on('rename2', rename2);
+  if (keep && $(keep)) $(keep).focus();
+}
+function say(t) { $('status').textContent = t; }
+
+function countAna() {
+  if (stage === 1) {
+    const found = flat.filter(r => r.EmployeeName === 'Ana Torres').length;
+    say('A search for EmployeeName = "Ana Torres" finds ' + found + ' rows. She really has 3 certifications. Row 4 is typed "Ana Toress", so the search misses it, and nothing in the table can tell you that row 4 is the same person.');
+  } else {
+    say('Employees has one Ana Torres, with Id 1. The Certifications table has 3 rows with EmployeeId 1 (rows 1, 4, and 6), so the count is 3. The typo is gone because her name is typed only once.');
+  }
+}
+function renameFlat(miss) {
+  marks = {};
+  const rows = flat.filter(r => r.EmployeeName === 'Ben Carter' || r.EmployeeName === 'Benjamin Carter');
+  rows.forEach((r, i) => {
+    if (miss && i === rows.length - 1) { marks['flat:' + r.Id + ':EmployeeName'] = 'missed'; }
+    else { r.EmployeeName = 'Benjamin Carter'; marks['flat:' + r.Id + ':EmployeeName'] = 'changed'; }
+  });
+  render();
+  say(miss
+    ? 'Ben goes by Benjamin now. The update changed row 2 but missed row 5. The table now says Benjamin Carter has a forklift certification and a different person, Ben Carter, has CPR. Nothing stops this from happening.'
+    : 'Ben goes by Benjamin now. In a flat table his name is stored in ' + rows.length + ' rows, so ' + rows.length + ' rows had to change. With 50 certifications, that could be 50 rows.');
+}
+function moveAna() {
+  marks = {};
+  if (stage === 1) {
+    let n = 0;
+    flat.forEach(r => { if (r.EmployeeName === 'Ana Torres') { r.Department = 'Emergency'; marks['flat:' + r.Id + ':Department'] = 'changed'; n++; }
+                        else if (r.EmployeeName === 'Ana Toress') { marks['flat:' + r.Id + ':Department'] = 'missed'; } });
+    render();
+    say('Ana moved to the Emergency department. Changing every row where EmployeeName is "Ana Torres" updated ' + n + ' rows, but row 4, the misspelled one, still says Nursing.');
+  } else {
+    emps.find(e => e.Id === 1).Department = 'Emergency'; marks['emp:1:Department'] = 'changed';
+    render();
+    say('One row changed: Employees row 1. Every certification with EmployeeId 1 now belongs to someone in Emergency, because the department is stored in one place.');
+  }
+}
+function nextStep() {
+  step++; marks = {};
+  if (step === 1) {
+    emps = EMP0.map(e => ({ ...e }));
+    say('Step 1: pull out the employees. Each person gets one row and an Id. While doing this you notice Ana Toress is Ana Torres, so you fix it once. Each certification will point to an employee by EmployeeId instead of repeating the name and department.');
+  } else if (step === 2) {
+    types = TYPE0.map(t => ({ ...t }));
+    say('Step 2: pull out the certification types. CPR/First Aid and CPR and First Aid are the same certification, so they become one row. ValidMonths moves here too, because it belongs to the type, not to each person.');
+  } else {
+    certRows().forEach(c => { marks['cert:' + c.Id + ':EmployeeId'] = 'key'; marks['cert:' + c.Id + ':CertificationTypeId'] = 'key'; });
+    say('Step 3: what is left in Certifications is only what belongs to one certification: the dates, plus two foreign keys, EmployeeId and CertificationTypeId. The joined table at the end shows that no information was lost.');
+  }
+  render();
+  const n = $('next'); if (n) n.focus(); else $('count-ana').focus();
+}
+function rename2() {
+  marks = {};
+  emps.find(e => e.Id === 2).Name = 'Benjamin Carter'; marks['emp:2:Name'] = 'changed';
+  render();
+  say('One row changed: Employees row 2. Look at the joined table. Both of his certifications show Benjamin Carter, because they point to him by EmployeeId 2. There is no row to miss.');
+}
+
+reset(); render();
+</script>
+</body>
+</html>
