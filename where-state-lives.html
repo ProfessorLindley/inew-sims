@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Where State Lives</title>
+<style>
+  :root { --green: #215732; --green-bg: #f3f8f4; --ink: #1a1a1a; --muted: #4a4a4a; --line: #888888;
+          --warn: #8a1c1c; --warn-bg: #fdf0f0; --hi: #fff3bf; --code-bg: #f4f4f4; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: #ffffff; color: var(--ink);
+         font-family: Lato, "Segoe UI", Arial, sans-serif; font-size: 16px; line-height: 1.5; }
+  h1 { font-size: 1.35rem; margin: 0 0 4px 0; color: var(--green); }
+  h2 { font-size: 1.1rem; margin: 18px 0 6px 0; }
+  p.lead { margin: 0 0 12px 0; color: var(--muted); }
+  .panel { border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin: 10px 0; background: #ffffff; }
+  button { font-size: 1rem; padding: 8px 14px; margin: 6px 6px 0 0; border-radius: 6px; cursor: pointer;
+           border: 2px solid var(--green); background: var(--green); color: #ffffff; }
+  button.secondary { background: #ffffff; color: var(--green); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  :focus-visible { outline: 3px solid #1f6feb; outline-offset: 2px; }
+  code { font-family: Consolas, Menlo, monospace; background: var(--code-bg); padding: 0 3px; border-radius: 3px; }
+  .note { font-size: 0.92rem; color: var(--muted); }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; margin: 8px 0; }
+  th, td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; }
+  th { background: #e9ecef; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.9rem; border: 1px solid var(--ink); white-space: nowrap; }
+  .yes { background: #e6f4ea; }
+  .no { background: var(--warn-bg); color: var(--warn); }
+  .set { background: var(--hi); }
+  ol.order { margin: 4px 0 0 0; padding-left: 22px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Where State Lives</h1>
+  <p class="lead">A small Razor Pages app saves the word blue seven different ways. Do something a user would do, then see which
+    of the seven the server can still read on the next request, and why.</p>
+
+  <div class="panel">
+    <button type="button" id="ev-save">Save blue all seven ways</button>
+    <h2>Then do one of these</h2>
+    <div role="group" aria-label="Events">
+      <button type="button" class="secondary" id="ev-link">Click a plain link</button>
+      <button type="button" class="secondary" id="ev-send">Submit the page's form</button>
+      <button type="button" class="secondary" id="ev-redirect">Post, then get redirected</button>
+      <button type="button" class="secondary" id="ev-refresh">Refresh the page</button>
+      <button type="button" class="secondary" id="ev-newtab">Open the site in a new tab</button>
+      <button type="button" class="secondary" id="ev-otherbrowser">Visit from a different browser</button>
+      <button type="button" class="secondary" id="ev-reopen">Close the browser and reopen it</button>
+      <button type="button" class="secondary" id="ev-restart">Restart the app</button>
+    </div>
+    <p class="note" id="refresh-note"></p>
+    <details>
+      <summary>A good order to try them in</summary>
+      <ol class="order">
+        <li>Save, then click a plain link. Then click the link again.</li>
+        <li>Save, submit the form, and submit it again.</li>
+        <li>Save, then post and get redirected. Refresh.</li>
+        <li>Save, then open a new tab. Visit from a different browser.</li>
+        <li>Save, then close and reopen the browser.</li>
+        <li>Save, then restart the app.</li>
+      </ol>
+    </details>
+  </div>
+
+  <div class="panel" aria-live="polite" id="live">
+    <p style="margin:0"><span style="font-weight:bold">What happened:</span> <span id="what">Nothing yet. The browser has loaded /State and nothing is saved.</span></p>
+    <p style="margin:4px 0 0 0"><span style="font-weight:bold">Request the server saw:</span> <code id="req">GET /State</code></p>
+  </div>
+
+  <div class="scroll" tabindex="0" role="region" aria-label="What the server can read">
+    <table>
+      <caption style="text-align:left;font-weight:bold">Can the server read blue on this request?</caption>
+      <thead><tr><th scope="col">Where blue was saved</th><th scope="col">Result</th><th scope="col">Why</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+  <h2>History</h2>
+  <div class="scroll" tabindex="0" role="region" aria-label="History of events">
+    <table>
+      <caption class="note" style="text-align:left">Each row is one event. Yes means the server could read blue.</caption>
+      <thead><tr><th scope="col">#</th><th scope="col">Event</th><th scope="col">Query</th><th scope="col">Hidden</th><th scope="col">TempData</th>
+        <th scope="col">Session</th><th scope="col">Cookie</th><th scope="col">Static</th><th scope="col">Database</th></tr></thead>
+      <tbody id="history"></tbody>
+    </table>
+  </div>
+
+  <p class="note">Every result here was checked against a real ASP.NET Core 10 app driven by a real Chromium browser. Two things depend on the browser
+    and the server. Some browsers have a "continue where you left off" setting that brings back session cookies after a restart, so Session and
+    TempData could survive there. TempData also survived the app restart here because the app's encryption keys were saved on disk, which is the
+    default on your own computer and in Codespaces.</p>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const KEYS = ['query', 'hidden', 'temp', 'session', 'cookie', 'static', 'db'];
+const NAMES = { query: 'Query string (?color=blue)', hidden: 'Hidden form field', temp: 'TempData', session: 'Session',
+                cookie: 'Cookie (expires in 7 days)', static: 'Static field in memory', db: 'Database' };
+const EVENT_NAMES = { save: 'Save', link: 'Plain link', send: 'Submit form', redirect: 'Post and redirect', refresh: 'Refresh',
+                      newtab: 'New tab', otherbrowser: 'Different browser', reopen: 'Close and reopen', restart: 'Restart app' };
+
+// Model of the real app. Browser A is the student's browser; "different browser" only looks.
+let s, step = 0;
+function reset() {
+  s = { url: '/State', pageHidden: false, lastPost: false,
+        tempPending: false, sessCookie: false, serverSess: false, cookie: false, stat: false, db: false };
+}
+
+// What one request in browser A can read. Reading TempData uses it up.
+function readA(hiddenSent) {
+  const r = {}, why = {};
+  r.query = s.url.includes('color=blue');
+  why.query = r.query ? 'The address still ends with ?color=blue.' : 'The address is just /State, so there is no color in it.';
+  r.hidden = hiddenSent;
+  why.hidden = hiddenSent ? 'The form carried the hidden field back to the server.'
+    : 'Only a form post sends a hidden field, and only if the page that drew the form put blue in it.';
+  r.temp = s.tempPending;
+  why.temp = r.temp ? 'First read since it was saved. Reading it marks it for deletion, so the next request will not see it.'
+    : 'TempData is read once. It was already read, or nothing was saved in this browser.';
+  s.tempPending = false;
+  r.session = s.sessCookie && s.serverSess;
+  why.session = r.session ? 'The browser sent its session cookie, and the server still has the data for it.'
+    : (!s.sessCookie ? 'This browser has no session cookie to send.' : 'The browser sent its session cookie, but the server lost that session data when it restarted.');
+  r.cookie = s.cookie;
+  why.cookie = r.cookie ? 'The browser sent the cookie. It has an expiration date, so the browser keeps it on disk.' : 'This browser has no color cookie.';
+  r.static = s.stat;
+  why.static = r.static ? 'The value is in the app’s memory and shared by every user.' : 'The app’s memory was cleared when it stopped, or nothing was saved yet.';
+  r.db = s.db;
+  why.db = r.db ? 'The value is in the database file, shared by every user, and kept when the app stops.' : 'Nothing has been saved to the database yet.';
+  return { r, why };
+}
+
+function fromOtherBrowser() {
+  const r = { query: false, hidden: false, temp: false, session: false, cookie: false, static: s.stat, db: s.db };
+  const why = {
+    query: 'The other browser typed /State, with no color in the address.',
+    hidden: 'The other browser has not posted any form.',
+    temp: 'TempData is stored in a cookie in the first browser, not this one.',
+    session: 'The session cookie belongs to the first browser, so this browser starts with no session.',
+    cookie: 'Cookies belong to one browser. This browser never received the color cookie.',
+    static: s.stat ? 'Static fields are shared by everyone who uses the app, so a different person sees blue too.' : 'Nothing is in the app’s memory.',
+    db: s.db ? 'The database is shared by everyone, so a different person sees blue too.' : 'Nothing has been saved to the database yet.' };
+  return { r, why };
+}
+
+function run(ev) {
+  let res, what, req;
+  if (ev === 'save') {
+    s.url = '/State?color=blue'; s.pageHidden = true; s.lastPost = true;
+    s.tempPending = true; s.sessCookie = true; s.serverSess = true; s.cookie = true; s.stat = true; s.db = true;
+    const r = {}, why = {};
+    KEYS.forEach(k => { r[k] = 'set'; });
+    why.query = 'The form posted to /State?color=blue, so the address now holds it.';
+    why.hidden = 'The page that came back has a form with a hidden field holding blue.';
+    why.temp = 'Saved now. It can be read on a later request, one time.';
+    why.session = 'Saved in the server’s memory. The browser got a session cookie that points to it.';
+    why.cookie = 'The response told the browser to keep a color cookie for 7 days.';
+    why.static = 'Saved in a static field in the app’s memory.';
+    why.db = 'Saved as a row in the SQLite database.';
+    res = { r, why };
+    what = 'You clicked Save. The server saved blue all seven ways and sent the page back.';
+    req = 'POST /State?color=blue';
+  } else if (ev === 'link') {
+    s.url = '/State'; res = readA(false); s.pageHidden = false; s.lastPost = false;
+    what = 'You clicked a plain link to /State.'; req = 'GET /State';
+  } else if (ev === 'send') {
+    req = 'POST ' + s.url;
+    res = readA(s.pageHidden); s.lastPost = true;
+    what = s.pageHidden ? 'You submitted the form. Its hidden field still held blue, and the page drew it again in the form it sent back.'
+      : 'You submitted the form, but its hidden field was empty, because this page was not drawn with blue in it.';
+  } else if (ev === 'redirect') {
+    req = 'POST ' + s.url + '  then  302 Found, Location: /State  then  GET /State';
+    s.url = '/State'; res = readA(false); s.pageHidden = false; s.lastPost = false;
+    what = 'You posted a form, and the server answered with a redirect. The browser followed it with a new GET request, and that GET is what you see here.';
+  } else if (ev === 'refresh') {
+    req = 'GET ' + s.url;
+    res = readA(false); s.pageHidden = false; s.lastPost = false;
+    what = 'You refreshed, so the browser sent the same GET request again.';
+  } else if (ev === 'newtab') {
+    s.url = '/State'; res = readA(false); s.pageHidden = false; s.lastPost = false;
+    what = 'You opened /State in a new tab. Tabs in the same browser share its cookies.'; req = 'GET /State (new tab)';
+  } else if (ev === 'otherbrowser') {
+    res = fromOtherBrowser();
+    what = 'Someone opened /State in a different browser. Nothing changed in your own browser.'; req = 'GET /State (different browser)';
+  } else if (ev === 'reopen') {
+    s.sessCookie = false; s.tempPending = false; s.url = '/State';
+    res = readA(false); s.pageHidden = false; s.lastPost = false;
+    res.why.temp = 'TempData lives in a cookie with no expiration date, and the browser deleted it when it closed.';
+    if (!res.r.session) res.why.session = 'The session cookie has no expiration date, so the browser deleted it when it closed. The data on the server can no longer be found.';
+    what = 'You closed the browser, opened it again, and typed in the address.'; req = 'GET /State (after reopening)';
+  } else if (ev === 'restart') {
+    s.stat = false; s.serverSess = false; s.url = '/State';
+    res = readA(false); s.pageHidden = false; s.lastPost = false;
+    if (res.r.temp) res.why.temp = 'Not read yet, and its cookie was still in the browser. The restarted app could still unlock it because its encryption keys were saved on disk.';
+    what = 'The app stopped and started again (for example, you pressed Ctrl+C and ran dotnet run). Then you loaded the page.'; req = 'GET /State (after the restart)';
+  }
+  step++;
+  show(ev, res, what, req);
+}
+
+function badge(v) {
+  if (v === 'set') return '<span class="badge set" data-v="saved">Saved</span>';
+  return v ? '<span class="badge yes" data-v="blue">Yes, blue</span>' : '<span class="badge no" data-v="(nothing)">No, gone</span>';
+}
+function show(ev, res, what, req) {
+  $('what').textContent = what; $('req').textContent = req;
+  $('rows').innerHTML = KEYS.map(k => `<tr><th scope="row">${NAMES[k]}</th><td data-k="${k}">${badge(res.r[k])}</td><td>${res.why[k]}</td></tr>`).join('');
+  const short = v => v === 'set' ? 'Saved' : (v ? 'Yes' : 'No');
+  $('history').insertAdjacentHTML('beforeend', `<tr><td>${step}</td><td>${EVENT_NAMES[ev]}</td>` +
+    KEYS.map(k => `<td>${short(res.r[k])}</td>`).join('') + '</tr>');
+  const canRefresh = !s.lastPost;
+  $('ev-refresh').disabled = !canRefresh;
+  $('refresh-note').textContent = canRefresh ? '' :
+    'Refresh is turned off right now because the last page came from a form post. A real browser would ask whether to send the form again, which is why apps redirect after a post.';
+}
+
+['save', 'link', 'send', 'redirect', 'refresh', 'newtab', 'otherbrowser', 'reopen', 'restart']
+  .forEach(ev => $('ev-' + ev).addEventListener('click', () => run(ev)));
+reset();
+// Starting state: the browser has loaded /State and nothing is saved.
+(function initial() {
+  const res = readA(false);
+  $('rows').innerHTML = KEYS.map(k => `<tr><th scope="row">${NAMES[k]}</th><td data-k="${k}">${badge(res.r[k])}</td><td>${res.why[k]}</td></tr>`).join('');
+})();
+</script>
+</body>
+</html>

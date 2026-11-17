@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Login Flow</title>
+<style>
+  :root { --green: #215732; --green-bg: #f3f8f4; --ink: #1a1a1a; --muted: #4a4a4a; --line: #888888;
+          --warn: #8a1c1c; --warn-bg: #fdf0f0; --hi: #fff3bf; --code-bg: #f4f4f4; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: #ffffff; color: var(--ink);
+         font-family: Lato, "Segoe UI", Arial, sans-serif; font-size: 16px; line-height: 1.5; }
+  h1 { font-size: 1.35rem; margin: 0 0 4px 0; color: var(--green); }
+  h2 { font-size: 1.1rem; margin: 0 0 6px 0; }
+  p.lead { margin: 0 0 12px 0; color: var(--muted); }
+  .panel { border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin: 10px 0; background: #ffffff; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; }
+  .col { flex: 1 1 320px; min-width: 0; }
+  fieldset { border: 1px solid var(--line); border-radius: 6px; margin: 0 0 8px 0; }
+  legend { font-weight: bold; }
+  label { margin: 0 14px 0 4px; }
+  button { font-size: 1rem; padding: 8px 14px; margin: 6px 6px 0 0; border-radius: 6px; cursor: pointer;
+           border: 2px solid var(--green); background: var(--green); color: #ffffff; }
+  button.secondary { background: #ffffff; color: var(--green); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  :focus-visible { outline: 3px solid #1f6feb; outline-offset: 2px; }
+  pre { background: var(--code-bg); border: 1px solid #cccccc; border-radius: 4px; padding: 10px; margin: 6px 0;
+        overflow-x: auto; font-family: Consolas, Menlo, monospace; font-size: 0.88rem; white-space: pre; }
+  code { font-family: Consolas, Menlo, monospace; background: var(--code-bg); padding: 0 3px; border-radius: 3px; }
+  .note { font-size: 0.92rem; color: var(--muted); }
+  ol.trail { margin: 4px 0 0 0; padding-left: 22px; }
+  ol.trail li.current { background: var(--green-bg); font-weight: bold; }
+  ol.trail li.current::after { content: "  (this step)"; font-weight: normal; }
+  .scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Login Flow</h1>
+  <p class="lead">Follow a user who is not logged in as they try to open a page marked with <code>[Authorize]</code>. Each step is one
+    request and one response, copied from a real ASP.NET Core Identity app.</p>
+
+  <div class="panel">
+    <fieldset>
+      <legend>Choose a path</legend>
+      <input type="radio" id="p-right" name="path" value="right" checked><label for="p-right">Right password</label>
+      <input type="radio" id="p-wrong" name="path" value="wrong"><label for="p-wrong">Wrong password first</label>
+      <input type="radio" id="p-remember" name="path" value="remember"><label for="p-remember">Right password with Remember me</label>
+    </fieldset>
+    <p style="margin:4px 0 2px 0;font-weight:bold">The protected page</p>
+    <pre tabindex="0" role="region" aria-label="Reports page model code">[Authorize]
+public class ReportsModel : PageModel
+{
+    public void OnGet()
+    {
+    }
+}</pre>
+    <button type="button" id="next">Next step</button>
+    <button type="button" class="secondary" id="back" disabled>Back</button>
+    <button type="button" class="secondary" id="restart">Start over</button>
+  </div>
+
+  <div class="panel" aria-live="polite">
+    <h2 id="step-title">Step 0: nothing sent yet</h2>
+    <p id="why" style="margin:0">Click Next step to send the first request.</p>
+  </div>
+
+  <div class="row">
+    <div class="col">
+      <h2>Request (browser to server)</h2>
+      <pre id="req" tabindex="0" role="region" aria-label="Request">Nothing sent yet.</pre>
+    </div>
+    <div class="col">
+      <h2>Response (server to browser)</h2>
+      <pre id="res" tabindex="0" role="region" aria-label="Response">Nothing received yet.</pre>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>All steps on this path</h2>
+    <ol class="trail" id="trail"></ol>
+  </div>
+  <p class="note">Captured from a real app built from the Razor Pages template with Individual accounts, .NET 10, and SQLite.
+    Long cookie and token values are shortened, and headers that do not matter here are left out. The app runs on port 5960.</p>
+</main>
+<script>
+const DATA = {
+ "right": [
+  {
+   "title": "GET /Reports",
+   "status": "302 Found",
+   "req": "GET /Reports HTTP/1.1\nHost: localhost:5960\n(no Cookie header: the browser has no cookies for this site yet)",
+   "res": "HTTP/1.1 302 Found\nLocation: http://localhost:5960/Identity/Account/Login?ReturnUrl=%2FReports",
+   "why": "The browser asks for /Reports and has no login cookie to send. The Reports page has [Authorize], so ASP.NET Core stops the request and answers 302 Found. The Location header points at the login page, and ReturnUrl remembers where you were going."
+  },
+  {
+   "title": "GET /Identity/Account/Login?ReturnUrl=%2FReports",
+   "status": "200 OK",
+   "req": "GET /Identity/Account/Login?ReturnUrl=%2FReports HTTP/1.1\nHost: localhost:5960\n(no Cookie header: the browser has no cookies for this site yet)",
+   "res": "HTTP/1.1 200 OK\nSet-Cookie: Identity.External=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly\nSet-Cookie: .AspNetCore.Antiforgery.NZ3Nv2QBd3k=CfDJ8DqLyU_O... (155 characters); path=/; samesite=strict; httponly\nSet-Cookie: .AspNetCore.Mvc.CookieTempDataProvider=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly",
+   "why": "The browser follows the Location header on its own. The login page comes back with a form that holds an anti-forgery token, and the server sets a matching anti-forgery cookie. The Set-Cookie lines with a 1970 date tell the browser to delete cookies that are not in use."
+  },
+  {
+   "title": "POST /Identity/Account/Login?ReturnUrl=%2FReports",
+   "status": "302 Found",
+   "req": "POST /Identity/Account/Login?ReturnUrl=%2FReports HTTP/1.1\nHost: localhost:5960\nCookie: .AspNetCore.Antiforgery.NZ3Nv2QBd3k=CfDJ8DqLyU_O... (155 characters)\nContent-Type: application/x-www-form-urlencoded\n\nInput.Email=ana%40example.com&Input.Password=Cert-Track-2027&__RequestVerificationToken=CfDJ8DqLyU_O... (155 characters)&Input.RememberMe=false",
+   "res": "HTTP/1.1 302 Found\nLocation: /Reports\nSet-Cookie: .AspNetCore.Identity.Application=CfDJ8DqLyU_O... (752 characters); path=/; samesite=lax; httponly\nSet-Cookie: .AspNetCore.Mvc.CookieTempDataProvider=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly",
+   "why": "Right password. The server sets .AspNetCore.Identity.Application, an encrypted cookie that says who you are, and redirects to the ReturnUrl, /Reports. The cookie is httponly, so JavaScript on the page cannot read it. There is no expires date, so the browser deletes the cookie when it closes. Checking Remember me would add one."
+  },
+  {
+   "title": "GET /Reports",
+   "status": "200 OK",
+   "req": "GET /Reports HTTP/1.1\nHost: localhost:5960\nCookie: .AspNetCore.Antiforgery.NZ3Nv2QBd3k=CfDJ8DqLyU_O... (155 characters); .AspNetCore.Identity.Application=CfDJ8DqLyU_O... (752 characters)",
+   "res": "HTTP/1.1 200 OK",
+   "why": "The browser sends the login cookie with the request. ASP.NET Core unlocks it, knows the user is ana@example.com, and [Authorize] lets the request through. The page shows: Signed in as ana@example.com."
+  },
+  {
+   "title": "POST /Identity/Account/Logout?returnUrl=%2F",
+   "status": "302 Found",
+   "req": "POST /Identity/Account/Logout?returnUrl=%2F HTTP/1.1\nHost: localhost:5960\nCookie: .AspNetCore.Antiforgery.NZ3Nv2QBd3k=CfDJ8DqLyU_O... (155 characters); .AspNetCore.Identity.Application=CfDJ8DqLyU_O... (752 characters)\nContent-Type: application/x-www-form-urlencoded\n\n__RequestVerificationToken=CfDJ8DqLyU_O... (198 characters)",
+   "res": "HTTP/1.1 302 Found\nLocation: /\nSet-Cookie: .AspNetCore.Identity.Application=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly\nSet-Cookie: Identity.External=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly\nSet-Cookie: Identity.TwoFactorUserId=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly",
+   "why": "Clicking Logout posts a small form that holds only the anti-forgery token. The server answers with Set-Cookie lines dated 1970, which tell the browser to delete the login cookie, and redirects to the home page."
+  },
+  {
+   "title": "GET /",
+   "status": "200 OK",
+   "req": "GET / HTTP/1.1\nHost: localhost:5960\nCookie: .AspNetCore.Antiforgery.NZ3Nv2QBd3k=CfDJ8DqLyU_O... (155 characters)",
+   "res": "HTTP/1.1 200 OK",
+   "why": "The home page loads. Look at the Cookie header: the login cookie is gone."
+  },
+  {
+   "title": "GET /Reports",
+   "status": "302 Found",
+   "req": "GET /Reports HTTP/1.1\nHost: localhost:5960\nCookie: .AspNetCore.Antiforgery.NZ3Nv2QBd3k=CfDJ8DqLyU_O... (155 characters)",
+   "res": "HTTP/1.1 302 Found\nLocation: http://localhost:5960/Identity/Account/Login?ReturnUrl=%2FReports",
+   "why": "Back to the start. The browser has no login cookie anymore, so [Authorize] sends it to the login page again."
+  },
+  {
+   "title": "GET /Identity/Account/Login?ReturnUrl=%2FReports",
+   "status": "200 OK",
+   "req": "GET /Identity/Account/Login?ReturnUrl=%2FReports HTTP/1.1\nHost: localhost:5960\nCookie: .AspNetCore.Antiforgery.NZ3Nv2QBd3k=CfDJ8DqLyU_O... (155 characters)",
+   "res": "HTTP/1.1 200 OK\nSet-Cookie: Identity.External=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly\nSet-Cookie: .AspNetCore.Mvc.CookieTempDataProvider=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly",
+   "why": "The login page again. The user would have to log in before seeing Reports."
+  }
+ ],
+ "wrong": [
+  {
+   "title": "GET /Reports",
+   "status": "302 Found",
+   "req": "GET /Reports HTTP/1.1\nHost: localhost:5960\n(no Cookie header: the browser has no cookies for this site yet)",
+   "res": "HTTP/1.1 302 Found\nLocation: http://localhost:5960/Identity/Account/Login?ReturnUrl=%2FReports",
+   "why": "The browser asks for /Reports and has no login cookie to send. The Reports page has [Authorize], so ASP.NET Core stops the request and answers 302 Found. The Location header points at the login page, and ReturnUrl remembers where you were going."
+  },
+  {
+   "title": "GET /Identity/Account/Login?ReturnUrl=%2FReports",
+   "status": "200 OK",
+   "req": "GET /Identity/Account/Login?ReturnUrl=%2FReports HTTP/1.1\nHost: localhost:5960\n(no Cookie header: the browser has no cookies for this site yet)",
+   "res": "HTTP/1.1 200 OK\nSet-Cookie: Identity.External=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly\nSet-Cookie: .AspNetCore.Antiforgery.NZ3Nv2QBd3k=CfDJ8DqLyU_O... (155 characters); path=/; samesite=strict; httponly\nSet-Cookie: .AspNetCore.Mvc.CookieTempDataProvider=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly",
+   "why": "The browser follows the Location header on its own. The login page comes back with a form that holds an anti-forgery token, and the server sets a matching anti-forgery cookie. The Set-Cookie lines with a 1970 date tell the browser to delete cookies that are not in use."
+  },
+  {
+   "title": "POST /Identity/Account/Login?ReturnUrl=%2FReports",
+   "status": "200 OK",
+   "req": "POST /Identity/Account/Login?ReturnUrl=%2FReports HTTP/1.1\nHost: localhost:5960\nCookie: .AspNetCore.Antiforgery.NZ3Nv2QBd3k=CfDJ8DqLyU_O... (155 characters)\nContent-Type: application/x-www-form-urlencoded\n\nInput.Email=ana%40example.com&Input.Password=wrong-password&__RequestVerificationToken=CfDJ8DqLyU_O... (155 characters)&Input.RememberMe=false",
+   "res": "HTTP/1.1 200 OK\nSet-Cookie: .AspNetCore.Mvc.CookieTempDataProvider=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly",
+   "why": "Wrong password. The server answers 200 OK with the same login page and the message Invalid login attempt. No login cookie is set, and the message does not say whether the email or the password was wrong."
+  },
+  {
+   "title": "POST /Identity/Account/Login?ReturnUrl=%2FReports",
+   "status": "302 Found",
+   "req": "POST /Identity/Account/Login?ReturnUrl=%2FReports HTTP/1.1\nHost: localhost:5960\nCookie: .AspNetCore.Antiforgery.NZ3Nv2QBd3k=CfDJ8DqLyU_O... (155 characters)\nContent-Type: application/x-www-form-urlencoded\n\nInput.Email=ana%40example.com&Input.Password=Cert-Track-2027&__RequestVerificationToken=CfDJ8DqLyU_O... (155 characters)&Input.RememberMe=false",
+   "res": "HTTP/1.1 302 Found\nLocation: /Reports\nSet-Cookie: .AspNetCore.Identity.Application=CfDJ8DqLyU_O... (752 characters); path=/; samesite=lax; httponly\nSet-Cookie: .AspNetCore.Mvc.CookieTempDataProvider=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly",
+   "why": "Right password. The server sets .AspNetCore.Identity.Application, an encrypted cookie that says who you are, and redirects to the ReturnUrl, /Reports. The cookie is httponly, so JavaScript on the page cannot read it. There is no expires date, so the browser deletes the cookie when it closes. Checking Remember me would add one."
+  },
+  {
+   "title": "GET /Reports",
+   "status": "200 OK",
+   "req": "GET /Reports HTTP/1.1\nHost: localhost:5960\nCookie: .AspNetCore.Antiforgery.NZ3Nv2QBd3k=CfDJ8DqLyU_O... (155 characters); .AspNetCore.Identity.Application=CfDJ8DqLyU_O... (752 characters)",
+   "res": "HTTP/1.1 200 OK",
+   "why": "The browser sends the login cookie with the request. ASP.NET Core unlocks it, knows the user is ana@example.com, and [Authorize] lets the request through. The page shows: Signed in as ana@example.com."
+  },
+  {
+   "title": "POST /Identity/Account/Logout?returnUrl=%2F",
+   "status": "302 Found",
+   "req": "POST /Identity/Account/Logout?returnUrl=%2F HTTP/1.1\nHost: localhost:5960\nCookie: .AspNetCore.Antiforgery.NZ3Nv2QBd3k=CfDJ8DqLyU_O... (155 characters); .AspNetCore.Identity.Application=CfDJ8DqLyU_O... (752 characters)\nContent-Type: application/x-www-form-urlencoded\n\n__RequestVerificationToken=CfDJ8DqLyU_O... (198 characters)",
+   "res": "HTTP/1.1 302 Found\nLocation: /\nSet-Cookie: .AspNetCore.Identity.Application=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly\nSet-Cookie: Identity.External=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly\nSet-Cookie: Identity.TwoFactorUserId=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly",
+   "why": "Clicking Logout posts a small form that holds only the anti-forgery token. The server answers with Set-Cookie lines dated 1970, which tell the browser to delete the login cookie, and redirects to the home page."
+  },
+  {
+   "title": "GET /",
+   "status": "200 OK",
+   "req": "GET / HTTP/1.1\nHost: localhost:5960\nCookie: .AspNetCore.Antiforgery.NZ3Nv2QBd3k=CfDJ8DqLyU_O... (155 characters)",
+   "res": "HTTP/1.1 200 OK",
+   "why": "The home page loads. Look at the Cookie header: the login cookie is gone."
+  },
+  {
+   "title": "GET /Reports",
+   "status": "302 Found",
+   "req": "GET /Reports HTTP/1.1\nHost: localhost:5960\nCookie: .AspNetCore.Antiforgery.NZ3Nv2QBd3k=CfDJ8DqLyU_O... (155 characters)",
+   "res": "HTTP/1.1 302 Found\nLocation: http://localhost:5960/Identity/Account/Login?ReturnUrl=%2FReports",
+   "why": "Back to the start. The browser has no login cookie anymore, so [Authorize] sends it to the login page again."
+  },
+  {
+   "title": "GET /Identity/Account/Login?ReturnUrl=%2FReports",
+   "status": "200 OK",
+   "req": "GET /Identity/Account/Login?ReturnUrl=%2FReports HTTP/1.1\nHost: localhost:5960\nCookie: .AspNetCore.Antiforgery.NZ3Nv2QBd3k=CfDJ8DqLyU_O... (155 characters)",
+   "res": "HTTP/1.1 200 OK\nSet-Cookie: Identity.External=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly\nSet-Cookie: .AspNetCore.Mvc.CookieTempDataProvider=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly",
+   "why": "The login page again. The user would have to log in before seeing Reports."
+  }
+ ],
+ "remember": [
+  {
+   "title": "GET /Reports",
+   "status": "302 Found",
+   "req": "GET /Reports HTTP/1.1\nHost: localhost:5960\n(no Cookie header: the browser has no cookies for this site yet)",
+   "res": "HTTP/1.1 302 Found\nLocation: http://localhost:5960/Identity/Account/Login?ReturnUrl=%2FReports",
+   "why": "The browser asks for /Reports and has no login cookie to send. The Reports page has [Authorize], so ASP.NET Core stops the request and answers 302 Found. The Location header points at the login page, and ReturnUrl remembers where you were going."
+  },
+  {
+   "title": "GET /Identity/Account/Login?ReturnUrl=%2FReports",
+   "status": "200 OK",
+   "req": "GET /Identity/Account/Login?ReturnUrl=%2FReports HTTP/1.1\nHost: localhost:5960\n(no Cookie header: the browser has no cookies for this site yet)",
+   "res": "HTTP/1.1 200 OK\nSet-Cookie: Identity.External=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly\nSet-Cookie: .AspNetCore.Antiforgery.NZ3Nv2QBd3k=CfDJ8DqLyU_O... (155 characters); path=/; samesite=strict; httponly\nSet-Cookie: .AspNetCore.Mvc.CookieTempDataProvider=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly",
+   "why": "The browser follows the Location header on its own. The login page comes back with a form that holds an anti-forgery token, and the server sets a matching anti-forgery cookie. The Set-Cookie lines with a 1970 date tell the browser to delete cookies that are not in use."
+  },
+  {
+   "title": "POST /Identity/Account/Login?ReturnUrl=%2FReports",
+   "status": "302 Found",
+   "req": "POST /Identity/Account/Login?ReturnUrl=%2FReports HTTP/1.1\nHost: localhost:5960\nCookie: .AspNetCore.Antiforgery.NZ3Nv2QBd3k=CfDJ8DqLyU_O... (155 characters)\nContent-Type: application/x-www-form-urlencoded\n\nInput.Email=ana%40example.com&Input.Password=Cert-Track-2027&Input.RememberMe=true&__RequestVerificationToken=CfDJ8DqLyU_O... (155 characters)&Input.RememberMe=false",
+   "res": "HTTP/1.1 302 Found\nLocation: /Reports\nSet-Cookie: .AspNetCore.Identity.Application=CfDJ8DqLyU_O... (774 characters); expires=Tue, 01 Dec 2026 15:42:06 GMT; path=/; samesite=lax; httponly\nSet-Cookie: .AspNetCore.Mvc.CookieTempDataProvider=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly",
+   "why": "Right password. The server sets .AspNetCore.Identity.Application, an encrypted cookie that says who you are, and redirects to the ReturnUrl, /Reports. The cookie is httponly, so JavaScript on the page cannot read it. Remember me was checked, so the cookie has an expires date 14 days away and stays after the browser closes."
+  },
+  {
+   "title": "GET /Reports",
+   "status": "200 OK",
+   "req": "GET /Reports HTTP/1.1\nHost: localhost:5960\nCookie: .AspNetCore.Antiforgery.NZ3Nv2QBd3k=CfDJ8DqLyU_O... (155 characters); .AspNetCore.Identity.Application=CfDJ8DqLyU_O... (774 characters)",
+   "res": "HTTP/1.1 200 OK",
+   "why": "The browser sends the login cookie with the request. ASP.NET Core unlocks it, knows the user is ana@example.com, and [Authorize] lets the request through. The page shows: Signed in as ana@example.com."
+  },
+  {
+   "title": "POST /Identity/Account/Logout?returnUrl=%2F",
+   "status": "302 Found",
+   "req": "POST /Identity/Account/Logout?returnUrl=%2F HTTP/1.1\nHost: localhost:5960\nCookie: .AspNetCore.Antiforgery.NZ3Nv2QBd3k=CfDJ8DqLyU_O... (155 characters); .AspNetCore.Identity.Application=CfDJ8DqLyU_O... (774 characters)\nContent-Type: application/x-www-form-urlencoded\n\n__RequestVerificationToken=CfDJ8DqLyU_O... (198 characters)",
+   "res": "HTTP/1.1 302 Found\nLocation: /\nSet-Cookie: .AspNetCore.Identity.Application=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly\nSet-Cookie: Identity.External=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly\nSet-Cookie: Identity.TwoFactorUserId=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly",
+   "why": "Clicking Logout posts a small form that holds only the anti-forgery token. The server answers with Set-Cookie lines dated 1970, which tell the browser to delete the login cookie, and redirects to the home page."
+  },
+  {
+   "title": "GET /",
+   "status": "200 OK",
+   "req": "GET / HTTP/1.1\nHost: localhost:5960\nCookie: .AspNetCore.Antiforgery.NZ3Nv2QBd3k=CfDJ8DqLyU_O... (155 characters)",
+   "res": "HTTP/1.1 200 OK",
+   "why": "The home page loads. Look at the Cookie header: the login cookie is gone."
+  },
+  {
+   "title": "GET /Reports",
+   "status": "302 Found",
+   "req": "GET /Reports HTTP/1.1\nHost: localhost:5960\nCookie: .AspNetCore.Antiforgery.NZ3Nv2QBd3k=CfDJ8DqLyU_O... (155 characters)",
+   "res": "HTTP/1.1 302 Found\nLocation: http://localhost:5960/Identity/Account/Login?ReturnUrl=%2FReports",
+   "why": "Back to the start. The browser has no login cookie anymore, so [Authorize] sends it to the login page again."
+  },
+  {
+   "title": "GET /Identity/Account/Login?ReturnUrl=%2FReports",
+   "status": "200 OK",
+   "req": "GET /Identity/Account/Login?ReturnUrl=%2FReports HTTP/1.1\nHost: localhost:5960\nCookie: .AspNetCore.Antiforgery.NZ3Nv2QBd3k=CfDJ8DqLyU_O... (155 characters)",
+   "res": "HTTP/1.1 200 OK\nSet-Cookie: Identity.External=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly\nSet-Cookie: .AspNetCore.Mvc.CookieTempDataProvider=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; httponly",
+   "why": "The login page again. The user would have to log in before seeing Reports."
+  }
+ ]
+};
+const $ = id => document.getElementById(id);
+let path = 'right', at = 0;
+const steps = () => DATA[path];
+
+function render() {
+  const list = steps();
+  $('trail').innerHTML = list.map((s, i) => `<li${i + 1 === at ? ' class="current"' : ''}>${s.title} returns ${s.status}</li>`).join('');
+  if (at === 0) {
+    $('step-title').textContent = 'Step 0: nothing sent yet';
+    $('why').textContent = 'Click Next step to send the first request.';
+    $('req').textContent = 'Nothing sent yet.'; $('res').textContent = 'Nothing received yet.';
+  } else {
+    const s = list[at - 1];
+    $('step-title').textContent = `Step ${at} of ${list.length}: ${s.title} returns ${s.status}`;
+    $('why').textContent = s.why;
+    $('req').textContent = s.req; $('res').textContent = s.res;
+  }
+  $('next').disabled = at >= list.length;
+  $('back').disabled = at === 0;
+}
+$('next').addEventListener('click', () => { at++; render(); if ($('next').disabled) $('restart').focus(); });
+$('back').addEventListener('click', () => { at--; render(); if ($('back').disabled) $('next').focus(); });
+$('restart').addEventListener('click', () => { at = 0; render(); $('next').focus(); });
+document.querySelectorAll('input[name=path]').forEach(r => r.addEventListener('change', () => { path = r.value; at = 0; render(); }));
+render();
+</script>
+</body>
+</html>
