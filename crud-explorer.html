@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CRUD Explorer</title>
+<style>
+  /* Shared look for every INEW simulation. Embedded in Canvas pages with an iframe, so keep it light and plain. */
+  :root { --green: #215732; --green-bg: #f3f8f4; --ink: #1a1a1a; --muted: #4a4a4a; --line: #888888;
+          --warn: #8a1c1c; --warn-bg: #fdf0f0; --hi: #fff3bf; --code-bg: #f4f4f4; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: #ffffff; color: var(--ink);
+         font-family: Lato, "Segoe UI", Arial, sans-serif; font-size: 16px; line-height: 1.5; }
+  h1 { font-size: 1.35rem; margin: 0 0 4px 0; color: var(--green); }
+  h2 { font-size: 1.1rem; margin: 18px 0 6px 0; }
+  p.lead { margin: 0 0 12px 0; color: var(--muted); }
+  .panel { border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin: 10px 0; background: #ffffff; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; }
+  .col { flex: 1 1 280px; min-width: 0; }
+  label { display: block; font-weight: bold; margin: 8px 0 2px 0; }
+  input[type=text], input[type=number], select { width: 100%; max-width: 360px; padding: 6px 8px; font-size: 1rem;
+         border: 1px solid var(--line); border-radius: 4px; }
+  button { font-size: 1rem; padding: 8px 14px; margin: 6px 6px 0 0; border-radius: 6px; cursor: pointer;
+           border: 2px solid var(--green); background: var(--green); color: #ffffff; }
+  button.secondary { background: #ffffff; color: var(--green); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  :focus-visible { outline: 3px solid #1f6feb; outline-offset: 2px; }
+  pre { background: var(--code-bg); border: 1px solid #cccccc; border-radius: 4px; padding: 10px; margin: 6px 0;
+        overflow-x: auto; font-family: Consolas, Menlo, monospace; font-size: 0.92rem; white-space: pre; }
+  pre:focus-visible { outline: 3px solid #1f6feb; }
+  code { font-family: Consolas, Menlo, monospace; background: var(--code-bg); padding: 0 3px; border-radius: 3px; }
+  .step { border: 2px solid #cccccc; border-radius: 6px; padding: 8px 10px; margin: 6px 0; background: #ffffff; }
+  .step.active { border-color: var(--green); background: var(--green-bg); }
+  .step .tag { font-weight: bold; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.9rem; border: 1px solid var(--ink); }
+  .ok { background: #e6f4ea; } .bad { background: var(--warn-bg); color: var(--warn); }
+  .err { color: var(--warn); }
+  .note { font-size: 0.92rem; color: var(--muted); }
+  .hl { background: var(--hi); }
+  table { border-collapse: collapse; margin: 8px 0; }
+  th, td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; }
+  th { background: #e9ecef; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+<style>
+  .phase { border: 2px solid #cccccc; border-radius: 6px; padding: 10px 12px; margin: 8px 0; }
+  .phase h3 { font-size: 1rem; margin: 0 0 6px 0; }
+  .kv { margin: 2px 0; }
+  .kv b { display: inline-block; min-width: 7.5em; }
+  tr.changed td { background: #fff3bf; }
+  .scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+  <h1>CRUD Explorer</h1>
+  <p class="lead">Pick an action and a certification, then click Run. You see each request the browser makes, the page handler that runs,
+    the EF Core code, and the SQL that reaches the database. The table at the bottom is the database after the action.</p>
+
+  <div class="panel">
+    <div class="row">
+      <div class="col">
+        <label for="action">Action</label>
+        <select id="action">
+          <option value="list">List all certifications (Index)</option>
+          <option value="details">Details of one certification</option>
+          <option value="create">Create a certification</option>
+          <option value="edit">Edit: renew for one more year</option>
+          <option value="delete">Delete a certification</option>
+        </select>
+      </div>
+      <div class="col">
+        <label for="certid">Certification Id</label>
+        <select id="certid"></select>
+      </div>
+    </div>
+    <p class="note" id="action-note"></p>
+    <button type="button" id="run">Run</button>
+    <button type="button" class="secondary" id="reset">Reset the sample data</button>
+  </div>
+
+  <div id="out" aria-live="polite"><p class="panel">Choose an action and click Run.</p></div>
+
+  <h2>The Certifications table in the database</h2>
+  <div class="scroll" tabindex="0" role="region" aria-label="Certifications table">
+    <table>
+      <caption style="text-align:left" class="note">Rows changed by the last action are marked Changed.</caption>
+      <thead><tr><th scope="col">Id</th><th scope="col">Employee</th><th scope="col">Certification</th><th scope="col">Issued</th><th scope="col">Expires</th><th scope="col">Notes</th><th scope="col">Last action</th></tr></thead>
+      <tbody id="table"></tbody>
+    </table>
+  </div>
+  <p class="note">The SQL and parameter formats were captured from a real app using EF Core 10 and SQLite with this sample data. Each request uses a new
+    DbContext, the way a scoped DbContext works in a web app. After a successful POST, the page redirects to the list, which runs the List query again; that
+    query is left out to keep the output short. The Edit and Create pages also load the employee and certification lists for their dropdowns; those
+    queries are left out as well.</p>
+</main>
+<script>
+const SQL = {"LIST": "SELECT \"c\".\"Id\", \"c\".\"CertificationTypeId\", \"c\".\"EmployeeId\", \"c\".\"ExpiresOn\", \"c\".\"IssuedOn\", \"c\".\"Notes\", \"e\".\"Id\", \"e\".\"Department\", \"e\".\"Name\", \"c0\".\"Id\", \"c0\".\"Name\", \"c0\".\"ValidMonths\"\nFROM \"Certifications\" AS \"c\"\nINNER JOIN \"Employees\" AS \"e\" ON \"c\".\"EmployeeId\" = \"e\".\"Id\"\nINNER JOIN \"CertificationTypes\" AS \"c0\" ON \"c\".\"CertificationTypeId\" = \"c0\".\"Id\"\nORDER BY \"c\".\"ExpiresOn\"", "DETAILS": "SELECT \"c\".\"Id\", \"c\".\"CertificationTypeId\", \"c\".\"EmployeeId\", \"c\".\"ExpiresOn\", \"c\".\"IssuedOn\", \"c\".\"Notes\", \"e\".\"Id\", \"e\".\"Department\", \"e\".\"Name\", \"c0\".\"Id\", \"c0\".\"Name\", \"c0\".\"ValidMonths\"\nFROM \"Certifications\" AS \"c\"\nINNER JOIN \"Employees\" AS \"e\" ON \"c\".\"EmployeeId\" = \"e\".\"Id\"\nINNER JOIN \"CertificationTypes\" AS \"c0\" ON \"c\".\"CertificationTypeId\" = \"c0\".\"Id\"\nWHERE \"c\".\"Id\" = @id\nLIMIT 1", "FIND": "SELECT \"c\".\"Id\", \"c\".\"CertificationTypeId\", \"c\".\"EmployeeId\", \"c\".\"ExpiresOn\", \"c\".\"IssuedOn\", \"c\".\"Notes\"\nFROM \"Certifications\" AS \"c\"\nWHERE \"c\".\"Id\" = @p\nLIMIT 1", "INSERT": "INSERT INTO \"Certifications\" (\"CertificationTypeId\", \"EmployeeId\", \"ExpiresOn\", \"IssuedOn\", \"Notes\")\nVALUES (@p0, @p1, @p2, @p3, @p4)\nRETURNING \"Id\";", "UPDATE": "UPDATE \"Certifications\" SET \"CertificationTypeId\" = @p0, \"EmployeeId\" = @p1, \"ExpiresOn\" = @p2, \"IssuedOn\" = @p3, \"Notes\" = @p4\nWHERE \"Id\" = @p5\nRETURNING 1;", "DELETE": "DELETE FROM \"Certifications\"\nWHERE \"Id\" = @p0\nRETURNING 1;"};
+const EMP = {1: "Ana Torres", 2: "Ben Carter", 3: "Chloe Nguyen"};
+const TYPE = {1: "CPR and First Aid", 2: "Food Handler", 3: "Forklift Operator", 4: "OSHA 10"};
+const SEED = [
+  {Id: 1, EmployeeId: 1, CertificationTypeId: 1, IssuedOn: "2025-01-10", ExpiresOn: "2027-01-10", Notes: null},
+  {Id: 2, EmployeeId: 2, CertificationTypeId: 3, IssuedOn: "2024-02-01", ExpiresOn: "2027-02-01", Notes: null},
+  {Id: 3, EmployeeId: 3, CertificationTypeId: 2, IssuedOn: "2025-08-15", ExpiresOn: "2028-08-15", Notes: null},
+  {Id: 4, EmployeeId: 1, CertificationTypeId: 4, IssuedOn: "2023-03-01", ExpiresOn: "2028-03-01", Notes: null},
+  {Id: 5, EmployeeId: 2, CertificationTypeId: 1, IssuedOn: "2024-12-05", ExpiresOn: "2026-12-05", Notes: null}];
+const NEW_CERT = {EmployeeId: 3, CertificationTypeId: 1, IssuedOn: "2026-11-01", ExpiresOn: "2028-11-01", Notes: null};
+let rows, lastId, changed;
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+function reset() {
+  rows = SEED.map(r => ({...r})); lastId = 5; changed = {};
+  fillIds(); drawTable();
+}
+// DateTime.AddYears(1) in .NET: February 29 becomes February 28.
+function addYear(d) {
+  let [y, m, day] = d.split("-").map(Number); y += 1;
+  if (m === 2 && day === 29) day = 28;
+  return `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+const dt = d => `'${d}T00:00:00.0000000' (DbType = DateTime)`;
+const str = s => s === null ? "NULL" : `'${s}' (Size = ${s.length})`;
+
+function fillIds() {
+  const keep = $("certid").value;
+  const ids = rows.map(r => r.Id);
+  $("certid").innerHTML = ids.map(i => `<option value="${i}">${i}</option>`).join("") +
+    '<option value="99">99 (no certification has this Id)</option>';
+  if ([...$("certid").options].some(o => o.value === keep)) $("certid").value = keep;
+}
+function drawTable() {
+  $("table").innerHTML = rows.slice().sort((a, b) => a.Id - b.Id).map(r =>
+    `<tr${changed[r.Id] ? ' class="changed"' : ""}><td>${r.Id}</td><td>${EMP[r.EmployeeId]}</td><td>${TYPE[r.CertificationTypeId]}</td>` +
+    `<td>${r.IssuedOn}</td><td>${r.ExpiresOn}</td><td>${r.Notes ?? ""}</td><td>${changed[r.Id] || ""}</td></tr>`).join("");
+}
+function noteFor(a) {
+  return {list: "The Id is not used. The list page shows every certification.",
+          details: "Shows one certification with its employee and type.",
+          create: "Adds a CPR and First Aid certification for Chloe Nguyen, issued 2026-11-01, expiring 2028-11-01. The Id is not used; the database picks the next one.",
+          edit: "Opens the Edit form, then submits it with the expiration date one year later and the note Renewed.",
+          delete: "Opens the Delete confirmation page, then submits it."}[a];
+}
+
+// Each phase: method, url, handler, code, commands [{params, sql}], result
+function act(a, id) {
+  const find = r => rows.find(x => x.Id === r);
+  const phases = []; let status = "200 OK";
+  if (a === "list") {
+    phases.push({method: "GET", url: "/Certifications", handler: "OnGet()",
+      code: "Certifications = _db.Certifications\n    .Include(c => c.Employee)\n    .Include(c => c.CertificationType)\n    .OrderBy(c => c.ExpiresOn)\n    .ToList();",
+      cmds: [{params: "", sql: SQL.LIST}],
+      result: "200 OK. The page lists " + rows.length + " certification" + (rows.length === 1 ? "" : "s") + ", soonest to expire first: Ids " +
+              rows.slice().sort((x, y) => x.ExpiresOn < y.ExpiresOn ? -1 : x.ExpiresOn > y.ExpiresOn ? 1 : x.Id - y.Id).map(r => r.Id).join(", ") + "."});
+  } else if (a === "details") {
+    const r = find(id); if (!r) status = "404 Not Found";
+    phases.push({method: "GET", url: "/Certifications/Details/" + id, handler: "OnGet(int id)",
+      code: "var cert = _db.Certifications\n    .Include(c => c.Employee)\n    .Include(c => c.CertificationType)\n    .FirstOrDefault(c => c.Id == id);\nif (cert == null)\n{\n    return NotFound();\n}",
+      cmds: [{params: `@id='${id}'`, sql: SQL.DETAILS}],
+      result: r ? `200 OK. The page shows certification ${id}: ${EMP[r.EmployeeId]}, ${TYPE[r.CertificationTypeId]}, expires ${r.ExpiresOn}.`
+                : `404 Not Found. No row has Id ${id}, so FirstOrDefault returned null and the handler returned NotFound().`});
+  } else if (a === "create") {
+    lastId += 1; const r = {...NEW_CERT, Id: lastId}; rows.push(r); changed = {[r.Id]: "Changed: added"};
+    phases.push({method: "GET", url: "/Certifications/Create", handler: "OnGet()", code: "// Only fills the dropdown lists. No certification is read.", cmds: [], result: "200 OK. The empty form shows."});
+    phases.push({method: "POST", url: "/Certifications/Create", handler: "OnPost()",
+      code: "_db.Certifications.Add(NewCertification);\n_db.SaveChanges();\nreturn RedirectToPage(\"Index\");",
+      cmds: [{params: `@p0='${r.CertificationTypeId}', @p1='${r.EmployeeId}', @p2=${dt(r.ExpiresOn)}, @p3=${dt(r.IssuedOn)}, @p4=${str(r.Notes)}`, sql: SQL.INSERT}],
+      result: `302 Found, redirect to /Certifications. RETURNING "Id" sent back ${r.Id}, and EF Core put it in NewCertification.Id.`});
+  } else if (a === "edit" || a === "delete") {
+    const r = find(id); const page = a === "edit" ? "Edit" : "Delete";
+    phases.push({method: "GET", url: `/Certifications/${page}/${id}`, handler: "OnGet(int id)",
+      code: "Certification = _db.Certifications.Find(id);\nif (Certification == null)\n{\n    return NotFound();\n}",
+      cmds: [{params: `@p='${id}'`, sql: SQL.FIND}],
+      result: r ? (a === "edit" ? "200 OK. The Edit form shows the current values." : "200 OK. The page asks: Are you sure you want to delete this?")
+                : `404 Not Found. Find returned null, so the form never shows and nothing can be posted.`});
+    if (!r) status = "404 Not Found";
+    else if (a === "edit") {
+      const posted = {...r, ExpiresOn: addYear(r.ExpiresOn), Notes: "Renewed"};
+      phases.push({method: "POST", url: `/Certifications/Edit/${id}`, handler: "OnPost()",
+        code: "_db.Certifications.Update(Certification);\n_db.SaveChanges();\nreturn RedirectToPage(\"Index\");",
+        cmds: [{params: `@p5='${id}', @p0='${posted.CertificationTypeId}', @p1='${posted.EmployeeId}', @p2=${dt(posted.ExpiresOn)}, @p3=${dt(posted.IssuedOn)}, @p4=${str(posted.Notes)}`, sql: SQL.UPDATE}],
+        result: "302 Found, redirect to /Certifications. Update marks every column as changed, so the UPDATE sets all five, even the ones you did not touch."});
+      Object.assign(r, posted); changed = {[r.Id]: "Changed: updated"};
+    } else {
+      phases.push({method: "POST", url: `/Certifications/Delete/${id}`, handler: "OnPost(int id)",
+        code: "var cert = _db.Certifications.Find(id);\nif (cert != null)\n{\n    _db.Certifications.Remove(cert);\n    _db.SaveChanges();\n}\nreturn RedirectToPage(\"Index\");",
+        cmds: [{params: `@p='${id}'`, sql: SQL.FIND}, {params: `@p0='${id}'`, sql: SQL.DELETE}],
+        result: `302 Found, redirect to /Certifications. Find loaded the row again, then Remove and SaveChanges sent the DELETE. Certification ${id} is gone.`});
+      rows = rows.filter(x => x.Id !== id); changed = {};
+    }
+  }
+  return {status, phases};
+}
+
+function render(a, id, res) {
+  const blocks = res.phases.map((p, i) => {
+    const sql = p.cmds.length === 0 ? "<p class=\"kv\">No SQL is sent.</p>" : p.cmds.map((c, k) =>
+      `<p class="kv"><b>Parameters</b> ${c.params ? "<code>" + esc(c.params) + "</code>" : "none"}</p>` +
+      `<pre tabindex="0" role="region" aria-label="SQL command ${k + 1} for ${p.method} ${esc(p.url)}">${esc(c.sql)}</pre>`).join("");
+    return `<div class="phase"><h3>Request ${i + 1}: ${p.method} ${esc(p.url)}</h3>` +
+      `<p class="kv"><b>Handler</b> <code>${esc(p.handler)}</code></p>` +
+      `<p class="kv"><b>EF Core code</b></p><pre tabindex="0" role="region" aria-label="C# for ${p.method} ${esc(p.url)}">${esc(p.code)}</pre>` +
+      `<p class="kv"><b>SQL sent</b></p>${sql}<p class="kv"><b>Result</b> ${esc(p.result)}</p></div>`;
+  }).join("");
+  $("out").innerHTML = `<div class="panel"><h2 style="margin-top:0">Result: ${res.status}</h2>${blocks}</div>`;
+}
+
+$("action").addEventListener("change", () => { $("action-note").textContent = noteFor($("action").value); });
+$("run").addEventListener("click", () => {
+  const a = $("action").value, id = Number($("certid").value);
+  if (a !== "create") changed = {};
+  const res = act(a, id); render(a, id, res); fillIds(); drawTable();
+  // Used by the automated check that compares this page with the real EF Core app.
+  window.__last = {status: res.status, cmds: res.phases.flatMap(p => p.cmds),
+    order: rows.slice().sort((x, y) => x.ExpiresOn < y.ExpiresOn ? -1 : x.ExpiresOn > y.ExpiresOn ? 1 : x.Id - y.Id).map(r => r.Id),
+    table: rows.slice().sort((x, y) => x.Id - y.Id).map(r => [String(r.Id), EMP[r.EmployeeId], TYPE[r.CertificationTypeId], r.IssuedOn, r.ExpiresOn, r.Notes ?? ""])};
+});
+$("reset").addEventListener("click", () => { reset(); $("out").innerHTML = '<p class="panel">The table is back to the five sample certifications.</p>'; });
+$("action-note").textContent = noteFor("list");
+reset();
+</script>
+</body>
+</html>

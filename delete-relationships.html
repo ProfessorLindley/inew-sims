@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deleting Related Data</title>
+<style>
+  /* Shared look for every INEW simulation. Embedded in Canvas pages with an iframe, so keep it light and plain. */
+  :root { --green: #215732; --green-bg: #f3f8f4; --ink: #1a1a1a; --muted: #4a4a4a; --line: #888888;
+          --warn: #8a1c1c; --warn-bg: #fdf0f0; --hi: #fff3bf; --code-bg: #f4f4f4; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: #ffffff; color: var(--ink);
+         font-family: Lato, "Segoe UI", Arial, sans-serif; font-size: 16px; line-height: 1.5; }
+  h1 { font-size: 1.35rem; margin: 0 0 4px 0; color: var(--green); }
+  h2 { font-size: 1.1rem; margin: 18px 0 6px 0; }
+  p.lead { margin: 0 0 12px 0; color: var(--muted); }
+  .panel { border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin: 10px 0; background: #ffffff; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; }
+  .col { flex: 1 1 280px; min-width: 0; }
+  label { display: block; font-weight: bold; margin: 8px 0 2px 0; }
+  input[type=text], input[type=number], select { width: 100%; max-width: 360px; padding: 6px 8px; font-size: 1rem;
+         border: 1px solid var(--line); border-radius: 4px; }
+  button { font-size: 1rem; padding: 8px 14px; margin: 6px 6px 0 0; border-radius: 6px; cursor: pointer;
+           border: 2px solid var(--green); background: var(--green); color: #ffffff; }
+  button.secondary { background: #ffffff; color: var(--green); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  :focus-visible { outline: 3px solid #1f6feb; outline-offset: 2px; }
+  pre { background: var(--code-bg); border: 1px solid #cccccc; border-radius: 4px; padding: 10px; margin: 6px 0;
+        overflow-x: auto; font-family: Consolas, Menlo, monospace; font-size: 0.92rem; white-space: pre; }
+  pre:focus-visible { outline: 3px solid #1f6feb; }
+  code { font-family: Consolas, Menlo, monospace; background: var(--code-bg); padding: 0 3px; border-radius: 3px; }
+  .step { border: 2px solid #cccccc; border-radius: 6px; padding: 8px 10px; margin: 6px 0; background: #ffffff; }
+  .step.active { border-color: var(--green); background: var(--green-bg); }
+  .step .tag { font-weight: bold; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.9rem; border: 1px solid var(--ink); }
+  .ok { background: #e6f4ea; } .bad { background: var(--warn-bg); color: var(--warn); }
+  .err { color: var(--warn); }
+  .note { font-size: 0.92rem; color: var(--muted); }
+  .hl { background: var(--hi); }
+  table { border-collapse: collapse; margin: 8px 0; }
+  th, td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; }
+  th { background: #e9ecef; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+<style>
+  .kv { margin: 4px 0; }
+  .failed { border-left: 6px solid #8a1c1c; padding-left: 8px; }
+  .scroll { overflow-x: auto; }
+  fieldset { border: 1px solid #888888; border-radius: 6px; margin: 8px 0; }
+  legend { font-weight: bold; }
+  .opt { display: block; margin: 4px 0; }
+  .opt label { display: inline; font-weight: normal; margin-left: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Deleting Related Data</h1>
+  <p class="lead">What happens when you delete an employee who still has certifications? Pick how the relationship is set up, pick an employee,
+    and click Delete this employee. Every try starts from the same sample data.</p>
+
+  <div class="panel">
+    <fieldset>
+      <legend>How the app handles it</legend>
+      <span class="opt"><input type="radio" name="mode" id="m-cascade" value="cascade" checked><label for="m-cascade">Cascade (the EF Core default for a required foreign key)</label></span>
+      <span class="opt"><input type="radio" name="mode" id="m-restrict" value="restrict"><label for="m-restrict">Restrict</label></span>
+      <span class="opt"><input type="radio" name="mode" id="m-check" value="check"><label for="m-check">Check first in code (with Cascade still set)</label></span>
+    </fieldset>
+    <label for="emp">Employee</label>
+    <select id="emp">
+      <option value="1">Ana Torres (2 certifications)</option>
+      <option value="2">Ben Carter (2 certifications)</option>
+      <option value="3">Chloe Nguyen (1 certification)</option>
+      <option value="4">Dana Smith (no certifications)</option>
+    </select>
+    <h2>Setup in CertTrackContext</h2>
+    <pre id="config" tabindex="0" role="region" aria-label="Relationship setup code"></pre>
+    <p class="kv">The foreign key EF Core creates in the database:</p>
+    <pre id="fk" tabindex="0" role="region" aria-label="Foreign key in the database"></pre>
+    <h2>Code in the Delete page's OnPost</h2>
+    <pre id="handler" tabindex="0" role="region" aria-label="Delete handler code"></pre>
+    <button type="button" id="go">Delete this employee</button>
+  </div>
+
+  <div id="out" aria-live="polite"><p class="panel">Pick a setup and an employee, then click Delete this employee.</p></div>
+  <p class="note">Captured from a real app using EF Core 10 and SQLite with this sample data. Microsoft.Data.Sqlite turns on SQLite's foreign key checks,
+    which is why the database enforces both Cascade and Restrict. Dana Smith was added to the sample data so there is an employee with no certifications.</p>
+</main>
+<script>
+const DATA = {"cascade": {"1": {"id": 1, "name": "Ana Torres", "outcome": "deleted", "error": null, "inner": null, "cmds": [{"failed": false, "params": "@p='1'", "sql": "SELECT \"e\".\"Id\", \"e\".\"Department\", \"e\".\"Name\"\nFROM \"Employees\" AS \"e\"\nWHERE \"e\".\"Id\" = @p\nLIMIT 1"}, {"failed": false, "params": "@p0='1'", "sql": "DELETE FROM \"Employees\"\nWHERE \"Id\" = @p0\nRETURNING 1;"}], "table": [["2", "Ben Carter", "Forklift Operator", "2024-02-01", "2027-02-01", ""], ["3", "Chloe Nguyen", "Food Handler", "2025-08-15", "2028-08-15", ""], ["5", "Ben Carter", "CPR and First Aid", "2024-12-05", "2026-12-05", ""]], "employees": ["2 Ben Carter", "3 Chloe Nguyen", "4 Dana Smith"]}, "2": {"id": 2, "name": "Ben Carter", "outcome": "deleted", "error": null, "inner": null, "cmds": [{"failed": false, "params": "@p='2'", "sql": "SELECT \"e\".\"Id\", \"e\".\"Department\", \"e\".\"Name\"\nFROM \"Employees\" AS \"e\"\nWHERE \"e\".\"Id\" = @p\nLIMIT 1"}, {"failed": false, "params": "@p0='2'", "sql": "DELETE FROM \"Employees\"\nWHERE \"Id\" = @p0\nRETURNING 1;"}], "table": [["1", "Ana Torres", "CPR and First Aid", "2025-01-10", "2027-01-10", ""], ["3", "Chloe Nguyen", "Food Handler", "2025-08-15", "2028-08-15", ""], ["4", "Ana Torres", "OSHA 10", "2023-03-01", "2028-03-01", ""]], "employees": ["1 Ana Torres", "3 Chloe Nguyen", "4 Dana Smith"]}, "3": {"id": 3, "name": "Chloe Nguyen", "outcome": "deleted", "error": null, "inner": null, "cmds": [{"failed": false, "params": "@p='3'", "sql": "SELECT \"e\".\"Id\", \"e\".\"Department\", \"e\".\"Name\"\nFROM \"Employees\" AS \"e\"\nWHERE \"e\".\"Id\" = @p\nLIMIT 1"}, {"failed": false, "params": "@p0='3'", "sql": "DELETE FROM \"Employees\"\nWHERE \"Id\" = @p0\nRETURNING 1;"}], "table": [["1", "Ana Torres", "CPR and First Aid", "2025-01-10", "2027-01-10", ""], ["2", "Ben Carter", "Forklift Operator", "2024-02-01", "2027-02-01", ""], ["4", "Ana Torres", "OSHA 10", "2023-03-01", "2028-03-01", ""], ["5", "Ben Carter", "CPR and First Aid", "2024-12-05", "2026-12-05", ""]], "employees": ["1 Ana Torres", "2 Ben Carter", "4 Dana Smith"]}, "4": {"id": 4, "name": "Dana Smith", "outcome": "deleted", "error": null, "inner": null, "cmds": [{"failed": false, "params": "@p='4'", "sql": "SELECT \"e\".\"Id\", \"e\".\"Department\", \"e\".\"Name\"\nFROM \"Employees\" AS \"e\"\nWHERE \"e\".\"Id\" = @p\nLIMIT 1"}, {"failed": false, "params": "@p0='4'", "sql": "DELETE FROM \"Employees\"\nWHERE \"Id\" = @p0\nRETURNING 1;"}], "table": [["1", "Ana Torres", "CPR and First Aid", "2025-01-10", "2027-01-10", ""], ["2", "Ben Carter", "Forklift Operator", "2024-02-01", "2027-02-01", ""], ["3", "Chloe Nguyen", "Food Handler", "2025-08-15", "2028-08-15", ""], ["4", "Ana Torres", "OSHA 10", "2023-03-01", "2028-03-01", ""], ["5", "Ben Carter", "CPR and First Aid", "2024-12-05", "2026-12-05", ""]], "employees": ["1 Ana Torres", "2 Ben Carter", "3 Chloe Nguyen"]}}, "restrict": {"1": {"id": 1, "name": "Ana Torres", "outcome": "exception", "error": "Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.", "inner": "Microsoft.Data.Sqlite.SqliteException: SQLite Error 19: 'FOREIGN KEY constraint failed'.", "cmds": [{"failed": false, "params": "@p='1'", "sql": "SELECT \"e\".\"Id\", \"e\".\"Department\", \"e\".\"Name\"\nFROM \"Employees\" AS \"e\"\nWHERE \"e\".\"Id\" = @p\nLIMIT 1"}, {"failed": true, "params": "@p0='1'", "sql": "DELETE FROM \"Employees\"\nWHERE \"Id\" = @p0\nRETURNING 1;"}], "table": [["1", "Ana Torres", "CPR and First Aid", "2025-01-10", "2027-01-10", ""], ["2", "Ben Carter", "Forklift Operator", "2024-02-01", "2027-02-01", ""], ["3", "Chloe Nguyen", "Food Handler", "2025-08-15", "2028-08-15", ""], ["4", "Ana Torres", "OSHA 10", "2023-03-01", "2028-03-01", ""], ["5", "Ben Carter", "CPR and First Aid", "2024-12-05", "2026-12-05", ""]], "employees": ["1 Ana Torres", "2 Ben Carter", "3 Chloe Nguyen", "4 Dana Smith"]}, "2": {"id": 2, "name": "Ben Carter", "outcome": "exception", "error": "Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.", "inner": "Microsoft.Data.Sqlite.SqliteException: SQLite Error 19: 'FOREIGN KEY constraint failed'.", "cmds": [{"failed": false, "params": "@p='2'", "sql": "SELECT \"e\".\"Id\", \"e\".\"Department\", \"e\".\"Name\"\nFROM \"Employees\" AS \"e\"\nWHERE \"e\".\"Id\" = @p\nLIMIT 1"}, {"failed": true, "params": "@p0='2'", "sql": "DELETE FROM \"Employees\"\nWHERE \"Id\" = @p0\nRETURNING 1;"}], "table": [["1", "Ana Torres", "CPR and First Aid", "2025-01-10", "2027-01-10", ""], ["2", "Ben Carter", "Forklift Operator", "2024-02-01", "2027-02-01", ""], ["3", "Chloe Nguyen", "Food Handler", "2025-08-15", "2028-08-15", ""], ["4", "Ana Torres", "OSHA 10", "2023-03-01", "2028-03-01", ""], ["5", "Ben Carter", "CPR and First Aid", "2024-12-05", "2026-12-05", ""]], "employees": ["1 Ana Torres", "2 Ben Carter", "3 Chloe Nguyen", "4 Dana Smith"]}, "3": {"id": 3, "name": "Chloe Nguyen", "outcome": "exception", "error": "Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.", "inner": "Microsoft.Data.Sqlite.SqliteException: SQLite Error 19: 'FOREIGN KEY constraint failed'.", "cmds": [{"failed": false, "params": "@p='3'", "sql": "SELECT \"e\".\"Id\", \"e\".\"Department\", \"e\".\"Name\"\nFROM \"Employees\" AS \"e\"\nWHERE \"e\".\"Id\" = @p\nLIMIT 1"}, {"failed": true, "params": "@p0='3'", "sql": "DELETE FROM \"Employees\"\nWHERE \"Id\" = @p0\nRETURNING 1;"}], "table": [["1", "Ana Torres", "CPR and First Aid", "2025-01-10", "2027-01-10", ""], ["2", "Ben Carter", "Forklift Operator", "2024-02-01", "2027-02-01", ""], ["3", "Chloe Nguyen", "Food Handler", "2025-08-15", "2028-08-15", ""], ["4", "Ana Torres", "OSHA 10", "2023-03-01", "2028-03-01", ""], ["5", "Ben Carter", "CPR and First Aid", "2024-12-05", "2026-12-05", ""]], "employees": ["1 Ana Torres", "2 Ben Carter", "3 Chloe Nguyen", "4 Dana Smith"]}, "4": {"id": 4, "name": "Dana Smith", "outcome": "deleted", "error": null, "inner": null, "cmds": [{"failed": false, "params": "@p='4'", "sql": "SELECT \"e\".\"Id\", \"e\".\"Department\", \"e\".\"Name\"\nFROM \"Employees\" AS \"e\"\nWHERE \"e\".\"Id\" = @p\nLIMIT 1"}, {"failed": false, "params": "@p0='4'", "sql": "DELETE FROM \"Employees\"\nWHERE \"Id\" = @p0\nRETURNING 1;"}], "table": [["1", "Ana Torres", "CPR and First Aid", "2025-01-10", "2027-01-10", ""], ["2", "Ben Carter", "Forklift Operator", "2024-02-01", "2027-02-01", ""], ["3", "Chloe Nguyen", "Food Handler", "2025-08-15", "2028-08-15", ""], ["4", "Ana Torres", "OSHA 10", "2023-03-01", "2028-03-01", ""], ["5", "Ben Carter", "CPR and First Aid", "2024-12-05", "2026-12-05", ""]], "employees": ["1 Ana Torres", "2 Ben Carter", "3 Chloe Nguyen"]}}, "check": {"1": {"id": 1, "name": "Ana Torres", "outcome": "Ana Torres still has 2 certifications. Delete or move them first.", "error": null, "inner": null, "cmds": [{"failed": false, "params": "@p='1'", "sql": "SELECT \"e\".\"Id\", \"e\".\"Department\", \"e\".\"Name\"\nFROM \"Employees\" AS \"e\"\nWHERE \"e\".\"Id\" = @p\nLIMIT 1"}, {"failed": false, "params": "@id='1'", "sql": "SELECT COUNT(*)\nFROM \"Certifications\" AS \"c\"\nWHERE \"c\".\"EmployeeId\" = @id"}], "table": [["1", "Ana Torres", "CPR and First Aid", "2025-01-10", "2027-01-10", ""], ["2", "Ben Carter", "Forklift Operator", "2024-02-01", "2027-02-01", ""], ["3", "Chloe Nguyen", "Food Handler", "2025-08-15", "2028-08-15", ""], ["4", "Ana Torres", "OSHA 10", "2023-03-01", "2028-03-01", ""], ["5", "Ben Carter", "CPR and First Aid", "2024-12-05", "2026-12-05", ""]], "employees": ["1 Ana Torres", "2 Ben Carter", "3 Chloe Nguyen", "4 Dana Smith"]}, "2": {"id": 2, "name": "Ben Carter", "outcome": "Ben Carter still has 2 certifications. Delete or move them first.", "error": null, "inner": null, "cmds": [{"failed": false, "params": "@p='2'", "sql": "SELECT \"e\".\"Id\", \"e\".\"Department\", \"e\".\"Name\"\nFROM \"Employees\" AS \"e\"\nWHERE \"e\".\"Id\" = @p\nLIMIT 1"}, {"failed": false, "params": "@id='2'", "sql": "SELECT COUNT(*)\nFROM \"Certifications\" AS \"c\"\nWHERE \"c\".\"EmployeeId\" = @id"}], "table": [["1", "Ana Torres", "CPR and First Aid", "2025-01-10", "2027-01-10", ""], ["2", "Ben Carter", "Forklift Operator", "2024-02-01", "2027-02-01", ""], ["3", "Chloe Nguyen", "Food Handler", "2025-08-15", "2028-08-15", ""], ["4", "Ana Torres", "OSHA 10", "2023-03-01", "2028-03-01", ""], ["5", "Ben Carter", "CPR and First Aid", "2024-12-05", "2026-12-05", ""]], "employees": ["1 Ana Torres", "2 Ben Carter", "3 Chloe Nguyen", "4 Dana Smith"]}, "3": {"id": 3, "name": "Chloe Nguyen", "outcome": "Chloe Nguyen still has 1 certification. Delete or move them first.", "error": null, "inner": null, "cmds": [{"failed": false, "params": "@p='3'", "sql": "SELECT \"e\".\"Id\", \"e\".\"Department\", \"e\".\"Name\"\nFROM \"Employees\" AS \"e\"\nWHERE \"e\".\"Id\" = @p\nLIMIT 1"}, {"failed": false, "params": "@id='3'", "sql": "SELECT COUNT(*)\nFROM \"Certifications\" AS \"c\"\nWHERE \"c\".\"EmployeeId\" = @id"}], "table": [["1", "Ana Torres", "CPR and First Aid", "2025-01-10", "2027-01-10", ""], ["2", "Ben Carter", "Forklift Operator", "2024-02-01", "2027-02-01", ""], ["3", "Chloe Nguyen", "Food Handler", "2025-08-15", "2028-08-15", ""], ["4", "Ana Torres", "OSHA 10", "2023-03-01", "2028-03-01", ""], ["5", "Ben Carter", "CPR and First Aid", "2024-12-05", "2026-12-05", ""]], "employees": ["1 Ana Torres", "2 Ben Carter", "3 Chloe Nguyen", "4 Dana Smith"]}, "4": {"id": 4, "name": "Dana Smith", "outcome": "deleted", "error": null, "inner": null, "cmds": [{"failed": false, "params": "@p='4'", "sql": "SELECT \"e\".\"Id\", \"e\".\"Department\", \"e\".\"Name\"\nFROM \"Employees\" AS \"e\"\nWHERE \"e\".\"Id\" = @p\nLIMIT 1"}, {"failed": false, "params": "@id='4'", "sql": "SELECT COUNT(*)\nFROM \"Certifications\" AS \"c\"\nWHERE \"c\".\"EmployeeId\" = @id"}, {"failed": false, "params": "@p0='4'", "sql": "DELETE FROM \"Employees\"\nWHERE \"Id\" = @p0\nRETURNING 1;"}], "table": [["1", "Ana Torres", "CPR and First Aid", "2025-01-10", "2027-01-10", ""], ["2", "Ben Carter", "Forklift Operator", "2024-02-01", "2027-02-01", ""], ["3", "Chloe Nguyen", "Food Handler", "2025-08-15", "2028-08-15", ""], ["4", "Ana Torres", "OSHA 10", "2023-03-01", "2028-03-01", ""], ["5", "Ben Carter", "CPR and First Aid", "2024-12-05", "2026-12-05", ""]], "employees": ["1 Ana Torres", "2 Ben Carter", "3 Chloe Nguyen"]}}}, CODE = {"cascade": {"config": "// Nothing extra in OnModelCreating.\n// EmployeeId is an int, so the relationship is required,\n// and EF Core uses Cascade by default.", "handler": "var emp = _db.Employees.Find(id);\n_db.Employees.Remove(emp);\n_db.SaveChanges();"}, "restrict": {"config": "modelBuilder.Entity<Certification>()\n    .HasOne(c => c.Employee)\n    .WithMany(e => e.Certifications)\n    .HasForeignKey(c => c.EmployeeId)\n    .OnDelete(DeleteBehavior.Restrict);", "handler": "var emp = _db.Employees.Find(id);\n_db.Employees.Remove(emp);\n_db.SaveChanges();"}, "check": {"config": "// Same as Cascade: nothing extra in OnModelCreating.", "handler": "var emp = _db.Employees.Find(id);\nint count = _db.Certifications.Count(c => c.EmployeeId == id);\nif (count > 0)\n{\n    Message = $\"{emp.Name} still has {count} certification{(count == 1 ? \"\" : \"s\")}. Delete or move them first.\";\n    return Page();\n}\n_db.Employees.Remove(emp);\n_db.SaveChanges();"}}, FK = {"cascade": "CONSTRAINT \"FK_Certifications_Employees_EmployeeId\" FOREIGN KEY (\"EmployeeId\") REFERENCES \"Employees\" (\"Id\") ON DELETE CASCADE", "restrict": "CONSTRAINT \"FK_Certifications_Employees_EmployeeId\" FOREIGN KEY (\"EmployeeId\") REFERENCES \"Employees\" (\"Id\") ON DELETE RESTRICT", "check": "CONSTRAINT \"FK_Certifications_Employees_EmployeeId\" FOREIGN KEY (\"EmployeeId\") REFERENCES \"Employees\" (\"Id\") ON DELETE CASCADE"};
+const SEED_CERTS = [["1", "Ana Torres", "CPR and First Aid", "2025-01-10", "2027-01-10", ""], ["2", "Ben Carter", "Forklift Operator", "2024-02-01", "2027-02-01", ""], ["3", "Chloe Nguyen", "Food Handler", "2025-08-15", "2028-08-15", ""], ["4", "Ana Torres", "OSHA 10", "2023-03-01", "2028-03-01", ""], ["5", "Ben Carter", "CPR and First Aid", "2024-12-05", "2026-12-05", ""]];
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const mode = () => document.querySelector("input[name=mode]:checked").value;
+function showCode() { $("config").textContent = CODE[mode()].config; $("handler").textContent = CODE[mode()].handler; $("fk").textContent = FK[mode()]; }
+
+function summary(m, r) {
+  const before = SEED_CERTS.filter(c => c[1] === r.name).length;
+  if (r.outcome === "deleted") {
+    if (m === "cascade" && before > 0) return `${r.name} was deleted, and so ${before === 1 ? "was the 1 certification" : "were the " + before + " certifications"} that belonged to this employee. EF Core sent one DELETE for the employee; the database's ON DELETE CASCADE removed the certifications. No warning was shown.`;
+    return `${r.name} was deleted. There were no certifications pointing to this employee, so nothing else changed.`;
+  }
+  if (r.outcome === "exception") return `SaveChanges threw an exception, so nothing was deleted. In a real app the user sees an error page unless your code catches it.`;
+  return `The page shows a message instead of deleting: ${r.outcome} No DELETE was sent.`;
+}
+
+function run() {
+  const m = mode(), r = DATA[m][$("emp").value];
+  const cmds = r.cmds.map((c, i) => `<div${c.failed ? ' class="failed"' : ""}><p class="kv"><b>${c.failed ? "Command " + (i + 1) + ": failed in the database" : "Command " + (i + 1)}</b>. Parameters: <code>${esc(c.params) || "none"}</code></p>` +
+    `<pre tabindex="0" role="region" aria-label="SQL command ${i + 1}">${esc(c.sql)}</pre></div>`).join("");
+  const err = r.error ? `<p class="kv"><b>Exception</b></p><pre tabindex="0" role="region" aria-label="Exception message">${esc(r.error)}\nInner exception: ${esc(r.inner)}</pre>` : "";
+  const msg = (m === "check" && r.outcome !== "deleted") ? `<p class="kv"><b>Message on the page</b> ${esc(r.outcome)}</p>` : "";
+  const emps = r.employees.map(e => `<li>${esc(e)}</li>`).join("");
+  const certs = r.table.map(t => `<tr><td>${t[0]}</td><td>${esc(t[1])}</td><td>${esc(t[2])}</td><td>${t[4]}</td></tr>`).join("");
+  $("out").innerHTML = `<div class="panel"><h2 style="margin-top:0">What happened</h2><p id="summary">${esc(summary(m, r))}</p>` +
+    `<h3>SQL that reached the database</h3>${cmds}${err}${msg}` +
+    `<h3>Employees afterward</h3><ul>${emps}</ul>` +
+    `<div class="scroll" tabindex="0" role="region" aria-label="Certifications afterward"><table><caption style="text-align:left" class="note">Certifications afterward (${r.table.length} rows)</caption>` +
+    `<thead><tr><th scope="col">Id</th><th scope="col">Employee</th><th scope="col">Certification</th><th scope="col">Expires</th></tr></thead><tbody>${certs}</tbody></table></div></div>`;
+  window.__last = {mode: m, id: r.id, cmds: r.cmds.map(c => c.sql), employees: r.employees, rows: r.table.map(t => t[0])};
+}
+document.querySelectorAll("input[name=mode]").forEach(x => x.addEventListener("change", showCode));
+$("go").addEventListener("click", run);
+showCode();
+</script>
+</body>
+</html>
